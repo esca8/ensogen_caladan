@@ -467,7 +467,8 @@ int mlx5_verbs_init_context(bool uses_qsteering)
 	}
 
 	for (i = 0; dev_list[i]; i++) {
-		if (strncmp(ibv_get_device_name(dev_list[i]), "mlx5", 4))
+        printf("mlx5_init: device name = %s | i = %d\n", ibv_get_device_name(dev_list[i]), i); 
+		if (strncmp(ibv_get_device_name(dev_list[i]), "rocep5s0f1", 10))
 			continue;
 
 		if (ibv_device_to_pci_addr(dev_list[i], &pci_addr)) {
@@ -481,11 +482,20 @@ int mlx5_verbs_init_context(bool uses_qsteering)
 	}
 
 	if (!dev_list[i]) {
-		log_err("mlx5_init: IB device not found");
+		log_err("mlx5_init: IB device not found | i=%d\n", i);
 		return -1;
 	}
 
+    printf("Device: %s, transport: %d, pcie: %d:%d:%d:%d\n",
+       ibv_get_device_name(dev_list[i]),
+       dev_list[i]->transport_type,
+       (uint32_t)nic_pci_addr.domain,
+       (uint32_t)nic_pci_addr.bus,
+       (uint32_t)nic_pci_addr.slot,
+       (uint32_t)nic_pci_addr.func);
+
 	attr.flags = uses_qsteering ? 0 : MLX5DV_CONTEXT_FLAGS_DEVX;
+	// attr.flags = 0; 
 	context = mlx5dv_open_device(dev_list[i], &attr);
 	if (!context) {
 		log_err("mlx5_init: Couldn't get context for %s (errno %d)",

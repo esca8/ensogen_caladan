@@ -95,7 +95,7 @@ static void dataplane_loop_vfio(void)
 {
 	bool work_done;
 
-	log_info("main: core %u running dataplane. [Ctrl+C to quit]",
+	log_info("main: dataplane_loop_vfio. core %u running dataplane. [Ctrl+C to quit]",
 			rte_lcore_id());
 	fflush(stdout);
 
@@ -135,7 +135,7 @@ void dataplane_loop(void)
 		log_warn("main: port %u is on remote NUMA node to polling thread.\n\t"
 				"Performance will not be optimal.", dp.port);
 
-	log_info("main: core %u running dataplane. [Ctrl+C to quit]",
+	log_info("main: dataplane_loop. core %u running dataplane. [Ctrl+C to quit]",
 			rte_lcore_id());
 	fflush(stdout);
 
@@ -252,10 +252,17 @@ int main(int argc, char *argv[])
 			}
 			nic_pci_addr_str = argv[++i];
 			ret = pci_str_to_addr(nic_pci_addr_str, &nic_pci_addr);
+            log_info("!! iokern recv: pcie_addr=%04x:%02x:%02x.%x\n",
+                nic_pci_addr.domain,
+                nic_pci_addr.bus,
+                nic_pci_addr.slot,
+                nic_pci_addr.func
+            );
 			if (ret) {
 				log_err("invalid pci address: %s", nic_pci_addr_str);
 				return -EINVAL;
 			}
+
 		} else if (!strcmp(argv[i], "numanode")) {
 			if (sched_ops == &numa_ops) {
 				fprintf(stderr, "Can't combine numanode argument with numa scheduler");

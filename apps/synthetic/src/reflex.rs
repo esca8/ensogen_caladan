@@ -137,7 +137,7 @@ impl LoadgenProtocol for ReflexProtocol {
     }
 
     fn gen_req(&self, i: usize, p: &Packet, buf: &mut Vec<u8>) {
-        let mut rng: Mt64 = Mt64::new(p.randomness);
+        let mut rng: Mt64 = Mt64::new(p.randomness as u64);
         let lba = (rng.gen::<u64>() % NUM_SECTORS) & LBA_ALIGNMENT;
         let mut lbacount = self.sectors_per_rq.sample(&mut rng);
 

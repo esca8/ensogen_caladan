@@ -90,8 +90,8 @@ int directpath_init(void)
 		return ret;
 
 	memcpy(&nic_pci_addr, &iok.iok_info->directpath_pci, sizeof(nic_pci_addr));
-
-	log_info("directpath: using pci address from iokernel: %04hx:%02hhx:%02hhx.%hhd",
+    log_info("hello??\n");
+	log_info("!!! directpath: using pci address from iokernel: %04hx:%02hhx:%02hhx.%hhd",
 	         nic_pci_addr.domain, nic_pci_addr.bus,
 	         nic_pci_addr.slot, nic_pci_addr.func);
 

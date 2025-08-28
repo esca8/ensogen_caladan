@@ -21,7 +21,7 @@ mersenne_twister = "1.1.1"
 shenango = { path = "../../bindings/rust" }
 
 [profile.release]
-debug=false
+debug=true
 panic = "abort"
 
 [workspace]

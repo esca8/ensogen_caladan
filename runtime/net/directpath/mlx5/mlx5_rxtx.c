@@ -231,6 +231,7 @@ static int mlx5_gather_completions(struct mbuf **mbufs, struct mlx5_txq *v,
  */
 int mlx5_transmit_one(struct mbuf *m)
 {
+    log_info("!! mlx5_transmit_one");
 	struct kthread *k;
 	struct mlx5_txq *v;
 	struct mbuf *mbs[SQ_CLEAN_MAX];

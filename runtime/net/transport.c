@@ -4,6 +4,7 @@
 
 #include <base/stddef.h>
 #include <base/hash.h>
+#include <base/log.h>
 #include <runtime/rculist.h>
 #include <runtime/sync.h>
 #include <runtime/net.h>
@@ -152,6 +153,7 @@ struct l4_hdr {
 
 static struct trans_entry *trans_lookup(struct mbuf *m, bool reverse)
 {
+    log_info("!! inside trans_lookup");
 	const struct ip_hdr *iphdr;
 	const struct l4_hdr *l4hdr;
 	struct trans_entry *e;
@@ -163,11 +165,15 @@ static struct trans_entry *trans_lookup(struct mbuf *m, bool reverse)
 
 	iphdr = mbuf_network_hdr(m, *iphdr);
 	if (unlikely(iphdr->proto != IPPROTO_UDP &&
-		     iphdr->proto != IPPROTO_TCP))
-		return NULL;
+		     iphdr->proto != IPPROTO_TCP)) {
+        log_info("protocol is neither of IPPROTO_UDP, IPPROTO_TCP"); 
+        return NULL;
+    }
 	l4hdr = (struct l4_hdr *)mbuf_data(m);
-	if (unlikely(mbuf_length(m) < sizeof(*l4hdr)))
+	if (unlikely(mbuf_length(m) < sizeof(*l4hdr))) {
+        log_info("case 1: buflen=%d, hdrsize=%ld", mbuf_length(m), sizeof(*l4hdr)); 
 		return NULL;
+    }
 
 	/* parse the source and destination network address */
 	laddr.ip = ntoh32(iphdr->daddr);
@@ -175,8 +181,12 @@ static struct trans_entry *trans_lookup(struct mbuf *m, bool reverse)
 	raddr.ip = ntoh32(iphdr->saddr);
 	raddr.port = ntoh16(l4hdr->sport);
 
-	if (unlikely(reverse))
+    log_info("laddr: ip=%d, port=%d | raddr: ip=%d, port=%d", laddr.ip, laddr.port, raddr.ip, raddr.port); 
+
+	if (unlikely(reverse)) {
+        printf("!! trans_lookup: reverse!"); 
 		swapvars(laddr, raddr);
+    }
 
 	/* attempt to find a 5-tuple match */
 	hash = trans_hash_5tuple(iphdr->proto, laddr, raddr);
@@ -187,6 +197,7 @@ static struct trans_entry *trans_lookup(struct mbuf *m, bool reverse)
 		if (e->proto == iphdr->proto &&
 		    e->laddr.ip == laddr.ip && e->laddr.port == laddr.port &&
 		    e->raddr.ip == raddr.ip && e->raddr.port == raddr.port) {
+            log_info("returning non-null:) 5-tuple"); 
 			return e;
 		}
 	}
@@ -199,10 +210,11 @@ static struct trans_entry *trans_lookup(struct mbuf *m, bool reverse)
 			continue;
 		if (e->proto == iphdr->proto &&
 		    e->laddr.ip == laddr.ip && e->laddr.port == laddr.port) {
+            log_info("returning non-null:) 3-tuple"); 
 			return e;
 		}
 	}
-
+    log_info("returning null:("); 
 	return NULL;
 }
 
@@ -212,23 +224,29 @@ static struct trans_entry *trans_lookup(struct mbuf *m, bool reverse)
  */
 void net_rx_trans(struct mbuf *m)
 {
+    log_info("!!! inside net_rx_trans: start"); 
 	const struct ip_hdr *iphdr;
 	struct trans_entry *e;
 
 	/* set up the network header pointers */
+    log_info("!!! set offset"); 
 	mbuf_mark_transport_offset(m);
 
+    log_info("!!! read lock"); 
 	rcu_read_lock();
+    log_info("!!! trans lookup 1"); 
 	e = trans_lookup(m, false);
 	if (unlikely(!e)) {
 		rcu_read_unlock();
+        log_info("!!! trans lookup 2"); 
 		iphdr = mbuf_network_hdr(m, *iphdr);
 		if (iphdr->proto == IPPROTO_TCP)
 			tcp_rx_closed(m);
 		mbuf_free(m);
+        log_info("!!! returning"); 
 		return;
 	}
-
+    log_info("!!! inside net_rx_trans: recv | laddr_ip=%d:%d, raddr_ip=%d:%d", e->laddr.ip, (uint32_t)e->laddr.port, e->raddr.ip, (uint32_t)e->raddr.port); 
 	e->ops->recv(e, m);
 	rcu_read_unlock();
 }

@@ -11,10 +11,10 @@ use std::io::Read;
 pub struct Payload {
     pub work_iterations: u64,
     pub index: u64,
-    pub randomness: u64,
+    pub randomness: u16,
 }
 
-pub const PAYLOAD_SIZE: usize = 24;
+pub const PAYLOAD_SIZE: usize = 64; /* pkt size */
 
 #[derive(Clone, Copy)]
 pub struct SyntheticProtocol {}
@@ -38,7 +38,7 @@ impl LoadgenProtocol for SyntheticProtocol {
         let scratch = buf.get_empty_buf();
         sock.read_exact(&mut scratch[..PAYLOAD_SIZE])?;
         let payload = Payload::deserialize(&mut &scratch[..])?;
-        Ok((payload.index as usize, payload.randomness))
+        Ok((payload.index as usize, payload.randomness.into()))
     }
 }
 
@@ -56,7 +56,7 @@ impl Payload {
     pub fn serialize_into<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
         writer.write_u64::<BigEndian>(self.work_iterations)?;
         writer.write_u64::<BigEndian>(self.index)?;
-        writer.write_u64::<BigEndian>(self.randomness)?;
+        writer.write_u16::<BigEndian>(self.randomness)?;
         Ok(())
     }
 
@@ -64,7 +64,7 @@ impl Payload {
         let p = Payload {
             work_iterations: reader.read_u64::<BigEndian>()?,
             index: reader.read_u64::<BigEndian>()?,
-            randomness: reader.read_u64::<BigEndian>()?,
+            randomness: reader.read_u16::<BigEndian>()?,
         };
         return Ok(p);
     }

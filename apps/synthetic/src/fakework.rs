@@ -89,7 +89,7 @@ impl FakeWorker {
                 let seed: u64 = rand::thread_rng().gen();
                 self.warmup_cache();
                 let start = Instant::now();
-                self.work(iterations, seed);
+                self.work(iterations, seed.try_into().unwrap());
                 duration_to_ns(start.elapsed())
             })
             .sum::<u64>()
@@ -108,7 +108,7 @@ impl FakeWorker {
         println!("{} us: {} iterations", target_us, iterations);
     }
 
-    pub fn work(&self, iters: u64, randomness: u64) {
+    pub fn work(&self, iters: u64, randomness: u16) {
         match *self {
             FakeWorker::Sqrt => {
                 let k = 2350845.545;

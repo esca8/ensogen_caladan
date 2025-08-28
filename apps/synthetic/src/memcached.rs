@@ -191,8 +191,8 @@ impl LoadgenProtocol for MemcachedProtocol {
 
     fn gen_req(&self, i: usize, p: &Packet, buf: &mut Vec<u8>) {
         // Use first 32 bits of randomness to determine if this is a SET or GET req
-        let low32 = p.randomness & 0xffffffff;
-        let key = (p.randomness >> 32) % self.nvalues;
+        let low32 = (p.randomness as u64) & 0xffffffff;
+        let key = ((p.randomness as u64) >> 32) % self.nvalues;
 
         if low32 % 1000 < self.pct_set {
             self.set_request(key, i as u32, buf);

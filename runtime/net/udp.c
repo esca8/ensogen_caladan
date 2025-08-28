@@ -6,11 +6,13 @@
 
 #include <base/hash.h>
 #include <base/kref.h>
+#include <base/log.h>
 #include <runtime/smalloc.h>
 #include <runtime/rculist.h>
 #include <runtime/sync.h>
 #include <runtime/thread.h>
 #include <runtime/udp.h>
+#include <stdio.h>
 
 #include "defs.h"
 #include "waitq.h"
@@ -23,11 +25,14 @@ unsigned int udp_payload_size;
 static int udp_send_raw(struct mbuf *m, size_t len,
 			struct netaddr laddr, struct netaddr raddr)
 {
+    log_info("!! inside udp_send_raw | raddr.ip=%d, laddr.ip=%d\n", raddr.ip, laddr.ip);
 	struct udp_hdr *udphdr;
 
 	/* rewrite loopback address */
-	if (raddr.ip == MAKE_IP_ADDR(127, 0, 0, 1))
+	if (raddr.ip == MAKE_IP_ADDR(127, 0, 0, 1)) {
+        log_info("rewrite loopback addr");
 		raddr.ip = netcfg.addr;
+    }
 
 	/* write UDP header */
 	udphdr = mbuf_push_hdr(m, *udphdr);
@@ -39,6 +44,7 @@ static int udp_send_raw(struct mbuf *m, size_t len,
 	mbuf_mark_l4_ports(m, laddr.port, raddr.port);
 
 	/* send the IP packet */
+    log_info("!! inside udp_send_raw: sending \n");
 	return net_tx_ip(m, IPPROTO_UDP, raddr.ip);
 }
 
@@ -78,6 +84,7 @@ struct udpconn {
 /* handles ingress packets for UDP sockets */
 static void udp_conn_recv(struct trans_entry *e, struct mbuf *m)
 {
+    printf("!! udp_conn_recv");
 	udpconn_t *c = container_of(e, udpconn_t, e);
 	thread_t *th;
 
@@ -581,6 +588,7 @@ struct udpspawner {
 /* handles ingress packets with parallel threads */
 static void udp_par_recv(struct trans_entry *e, struct mbuf *m)
 {
+    printf("!! udp_par_recv");
 	udpspawner_t *s = container_of(e, udpspawner_t, e);
 	const struct ip_hdr *iphdr;
 	const struct udp_hdr *udphdr;
@@ -695,6 +703,8 @@ void udp_destroy_spawner(udpspawner_t *s)
 ssize_t udp_send(const void *buf, size_t len,
 		 struct netaddr laddr, struct netaddr raddr)
 {
+    printf("!! udp.c: in udp_send!! raddr=%d:%2u\n", raddr.ip, raddr.port); 
+    printf("!! udp.c: in udp_send!! laddr=%d:%2u\n", laddr.ip, laddr.port); 
 	void *payload;
 	struct mbuf *m;
 	int ret;
@@ -711,6 +721,8 @@ ssize_t udp_send(const void *buf, size_t len,
 	/* rewrite loopback address */
 	if (raddr.ip == MAKE_IP_ADDR(127, 0, 0, 1))
 		raddr.ip = netcfg.addr;
+    printf("!! udp.c: in udp_send!! raddr=%d:%2u\n", raddr.ip, raddr.port); 
+    printf("!! udp.c: in udp_send!! laddr=%d:%2u\n", laddr.ip, laddr.port); 
 
 	m = net_tx_alloc_mbuf(udp_headroom());
 	if (unlikely(!m))

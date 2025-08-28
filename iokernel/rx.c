@@ -50,6 +50,7 @@ static union rxq_cmd rx_make_cmd(struct rte_mbuf *buf)
 bool rx_send_to_runtime(struct proc *p, uint32_t hash, uint64_t cmd,
 			unsigned long payload)
 {
+    log_info("!! rx_send_to_runtime | payload = %ld", payload); 
 	struct thread *th;
 
 	if (likely(sched_threads_active(p) > 0)) {
@@ -75,6 +76,7 @@ bool rx_send_to_runtime(struct proc *p, uint32_t hash, uint64_t cmd,
 
 static bool rx_send_pkt_to_runtime(struct proc *p, struct rte_mbuf *buf)
 {
+    log_info("!! rx_send_pkt_to_runtime"); 
 	shmptr_t shmptr;
 	union rxq_cmd cmd = rx_make_cmd(buf);
 	void *data = rte_pktmbuf_mtod(buf, void *);
@@ -115,6 +117,7 @@ static bool azure_arp_response(struct rte_mbuf *buf)
 
 static void rx_one_pkt(struct rte_mbuf *buf)
 {
+    log_info("!! rx_one_pkt\n"); 
 	int ret, mark_id;
 	struct proc *p;
 	struct rte_arp_hdr *arphdr;
@@ -129,6 +132,7 @@ static void rx_one_pkt(struct rte_mbuf *buf)
 
 	/* use hardware assisted flow tagging to match packets to procs */
 	if (buf->ol_flags & RTE_MBUF_F_RX_FDIR_ID) {
+        log_info("!! hardware assisted");
 		STAT_INC(RX_FLOW_TAG_MATCH, 1);
 		mark_id = buf->hash.fdir.hi;
 		assert(mark_id >= 0 && mark_id < IOKERNEL_MAX_PROC);
@@ -142,7 +146,7 @@ static void rx_one_pkt(struct rte_mbuf *buf)
 		}
 	}
 
-	log_debug("rx: rx packet with MAC %02" PRIx8 " %02" PRIx8 " %02"
+	log_info("rx: rx packet with MAC %02" PRIx8 " %02" PRIx8 " %02"
 		  PRIx8 " %02" PRIx8 " %02" PRIx8 " %02" PRIx8,
 		  ptr_dst_addr->addr_bytes[0], ptr_dst_addr->addr_bytes[1],
 		  ptr_dst_addr->addr_bytes[2], ptr_dst_addr->addr_bytes[3],
@@ -151,12 +155,14 @@ static void rx_one_pkt(struct rte_mbuf *buf)
 	ether_type = rte_be_to_cpu_16(ptr_mac_hdr->ether_type);
 
 	if (likely(ether_type == ETHTYPE_IP)) {
+        log_info("!! rx.c: ether_type == ETHTYPE_IP"); 
 		iphdr = rte_pktmbuf_mtod_offset(buf, struct rte_ipv4_hdr *,
 			sizeof(*ptr_mac_hdr));
 		dst_ip = rte_be_to_cpu_32(iphdr->dst_addr);
 		if (unlikely(!(buf->ol_flags & RTE_MBUF_F_RX_RSS_HASH)))
 			STAT_INC(RX_HASH_MISSING, 1);
 	} else if (ether_type == ETHTYPE_ARP) {
+        log_info("!! rx.c: ether_type == ETHTYPE_ARP"); 
 		arphdr = rte_pktmbuf_mtod_offset(buf, struct rte_arp_hdr *,
 			sizeof(*ptr_mac_hdr));
 		dst_ip = rte_be_to_cpu_32(arphdr->arp_data.arp_tip);
@@ -266,9 +272,11 @@ bool rx_burst(void)
 	/* retrieve packets from NIC queue */
 	nb_rx = rte_eth_rx_burst(dp.port, 0, bufs, IOKERNEL_RX_BURST_SIZE);
 	STAT_INC(RX_PULLED, nb_rx);
-	if (nb_rx > 0)
-		log_debug("rx: received %d packets on port %d", nb_rx, dp.port);
-
+	if (nb_rx > 0) {
+		log_info("rx: received %d packets on port %d", nb_rx, dp.port);
+    } else {
+        log_warn_ratelimited("rx: received no packets on port %d\n", dp.port);
+    } 
 	for (i = 0; i < nb_rx; i++) {
 		if (i + RX_PREFETCH_STRIDE < nb_rx) {
 			prefetch(rte_pktmbuf_mtod(bufs[i + RX_PREFETCH_STRIDE],
