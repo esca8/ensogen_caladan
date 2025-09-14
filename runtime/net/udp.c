@@ -701,8 +701,8 @@ void udp_destroy_spawner(udpspawner_t *s)
  * occurs, returns < 0 to indicate the error code.
  */
 ssize_t udp_send(const void *buf, size_t len,
-		 struct netaddr laddr, struct netaddr raddr)
-{
+		 struct netaddr laddr, struct netaddr raddr) {
+    printf("!! udp.c: in udp_send!! buf=%p, len=%d\n", buf, len); 
     printf("!! udp.c: in udp_send!! raddr=%d:%2u\n", raddr.ip, raddr.port); 
     printf("!! udp.c: in udp_send!! laddr=%d:%2u\n", laddr.ip, laddr.port); 
 	void *payload;
