@@ -11,6 +11,7 @@
 #include <base/bitmap.h>
 #include <base/log.h>
 #include <base/cpu.h>
+#include <base/debug.h>
 
 #include <iokernel/directpath.h>
 #include <iokernel/queue.h>
@@ -148,6 +149,7 @@ static void sched_steer_flows(struct proc *p)
 
 static void sched_enable_kthread(struct proc *p, struct thread *th, unsigned int core)
 {
+    PRINT_DBG("sched_enable_kthread | core: %d | tid: %d | idle_link: %p\n", th->core, th->tid, &th->idle_link);
 	ACCESS_ONCE(th->q_ptrs->curr_grant_gen) = ++th->wake_gen;
 	thread_enable_sched_poll(th);
 	proc_enable_sched_poll(p);
@@ -173,7 +175,15 @@ static void sched_enable_kthread(struct proc *p, struct thread *th, unsigned int
 
 static void sched_disable_kthread(struct thread *th, unsigned int last_core)
 {
+    PRINT_DBG("sched_disable_kthread | core: %d | tid: %d | idle_link: %p\n", th->core, th->tid, &th->idle_link);
 	struct proc *p = th->p;
+    PRINT_DBG("proc info: ");
+    proc_print_info(p); 
+
+    if(!th->active) {
+        PRINT_DBG("thread inactive\n"); 
+        return; 
+    }
 
 	th->active = false;
 	th->change_tsc = cur_tsc;
@@ -210,6 +220,12 @@ __sched_run(struct core_state *s, struct thread *th, unsigned int core)
 	/* if we're still busy with the last run request than stop here */
 	if (s->wait) {
 		if (s->pending_th) {
+			/*
+			 * Avoid double-disable: pending_th will be disabled later
+			 * in sched_poll() as last_th when the context switch completes.
+			 * The check in sched_disable_kthread() (th->active) will prevent
+			 * actual double-disable, so we can always disable here.
+			 */
 			sched_disable_kthread(s->pending_th, UINT16_MAX);
 			proc_put(s->pending_th->p);
 		}
@@ -816,8 +832,11 @@ void sched_poll(void)
 		/* check if a pending context switch finished */
 		if (s->wait && ksched_poll_run_done(core)) {
 			if (s->last_th) {
-				sched_disable_kthread(s->last_th, core);
-				proc_put(s->last_th->p);
+				/* Avoid double-disable: skip if last_th will be re-run as pending_th */
+				if (!s->pending || s->last_th != s->pending_th) {
+					sched_disable_kthread(s->last_th, core);
+					proc_put(s->last_th->p);
+				}
 				s->last_th = NULL;
 			}
 			if (s->pending) {

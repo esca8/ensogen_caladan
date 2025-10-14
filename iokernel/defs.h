@@ -8,12 +8,14 @@
 #include <base/bitmap.h>
 #include <base/gen.h>
 #include <base/lrpc.h>
+#include <base/debug.h>
 #include <base/mem.h>
 #include <base/pci.h>
 #undef LIST_HEAD /* hack to deal with DPDK being annoying */
 #include <base/list.h>
 #include <iokernel/control.h>
 #include <net/ethernet.h>
+#include <stdio.h>
 
 #include "ref.h"
 
@@ -249,6 +251,18 @@ struct proc {
 extern void proc_timer_add(struct proc *p, uint64_t next_poll_tsc);
 extern void proc_timer_run(uint64_t now);
 extern uint64_t timer_pos;
+
+static inline void proc_print_info(struct proc *p)
+{
+	PRINT_DBG("proc[pid=%d]: thread_count=%u, active_thread_count=%u, "
+	       "has_directpath=%u, ip_addr=%u.%u.%u.%u\n",
+	       p->pid, p->thread_count, p->active_thread_count,
+	       p->has_directpath,
+	       (p->ip_addr >> 24) & 0xFF,
+	       (p->ip_addr >> 16) & 0xFF,
+	       (p->ip_addr >> 8) & 0xFF,
+	       p->ip_addr & 0xFF);
+}
 
 static inline size_t proc_pgsize(struct proc *p)
 {

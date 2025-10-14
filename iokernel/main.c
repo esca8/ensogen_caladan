@@ -8,6 +8,7 @@
 #include <base/init.h>
 #include <base/log.h>
 #include <base/stddef.h>
+#include <base/debug.h>
 
 #include <sys/utsname.h>
 
@@ -121,6 +122,7 @@ static void dataplane_loop_vfio(void)
  */
 void dataplane_loop(void)
 {
+    PRINT_DBG("dataplane_loop | dp.port = %d\n", (uint32_t)dp.port);
 	bool work_done;
 #if 0
 	uint64_t next_log_time = microtime();
@@ -252,7 +254,7 @@ int main(int argc, char *argv[])
 			}
 			nic_pci_addr_str = argv[++i];
 			ret = pci_str_to_addr(nic_pci_addr_str, &nic_pci_addr);
-            log_info("!! iokern recv: pcie_addr=%04x:%02x:%02x.%x\n",
+            PRINT_DBG("iokern recv: pcie_addr=%04x:%02x:%02x.%x\n",
                 nic_pci_addr.domain,
                 nic_pci_addr.bus,
                 nic_pci_addr.slot,

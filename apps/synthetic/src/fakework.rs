@@ -105,7 +105,7 @@ impl FakeWorker {
         while self.time(iterations) > target_ns {
             iterations -= 1;
         }
-        println!("{} us: {} iterations", target_us, iterations);
+        // println!("{} us: {} iterations", target_us, iterations);
     }
 
     pub fn work(&self, iters: u64, randomness: u16) {

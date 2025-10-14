@@ -9,6 +9,7 @@
 #include <base/slab.h>
 #include <base/hash.h>
 #include <base/thread.h>
+#include <base/debug.h>
 #include <asm/chksum.h>
 #include <net/chksum.h>
 #include <runtime/net.h>
@@ -174,7 +175,7 @@ static void net_rx_send_completion(shmptr_t data)
 
 static struct mbuf *net_rx_alloc_mbuf(shmptr_t data, union rxq_cmd cmd)
 {
-    log_info("!! net_rx_alloc_mbuf | cmd len = %d", (uint32_t)cmd.len); 
+    PRINT_DBG("!! net_rx_alloc_mbuf | cmd len = %d", (uint32_t)cmd.len); 
 	struct mbuf *m;
 	void *buf;
 	const void *src_buf;
@@ -195,7 +196,7 @@ static struct mbuf *net_rx_alloc_mbuf(shmptr_t data, union rxq_cmd cmd)
 	m->len = cmd.len;
 	m->csum_type = cmd.csum_type;
 	m->release = (void (*)(struct mbuf *))sfree;
-    log_info("!! net_rx_alloc_mbuf | mbuf len = %d", mbuf_length(m)); 
+    PRINT_DBG("!! net_rx_alloc_mbuf | mbuf len = %d", mbuf_length(m)); 
 
 out:
 	net_rx_send_completion(data);
@@ -236,7 +237,7 @@ void net_error(struct mbuf *m, int err)
 
 static void net_rx_one(struct mbuf *m)
 {
-    log_info("core.c: start net_rx_one | len1=%d\n", mbuf_length(m)); 
+    PRINT_DBG("core.c: start net_rx_one | len1=%d\n", mbuf_length(m)); 
 	const struct eth_hdr *llhdr;
 	const struct ip_hdr *iphdr;
 	uint16_t len;
@@ -249,9 +250,9 @@ static void net_rx_one(struct mbuf *m)
 	 */
 
 	llhdr = mbuf_pull_hdr_or_null(m, *llhdr);
-    log_info("core.c: start net_rx_one | len2=%d\n", mbuf_length(m)); 
+    PRINT_DBG("core.c: start net_rx_one | len2=%d\n", mbuf_length(m)); 
 	if (unlikely(!llhdr)) {
-        log_info("core.c: 1\n"); 
+        PRINT_DBG("core.c: 1\n"); 
 		goto drop;
     }
 
@@ -260,7 +261,7 @@ static void net_rx_one(struct mbuf *m)
 		net_rx_arp(m);
 		return;
 	}
-    log_info("core.c: start net_rx_one | len3=%d\n", mbuf_length(m)); 
+    PRINT_DBG("core.c: start net_rx_one | len3=%d\n", mbuf_length(m)); 
 
 	/* filter out requests we can't handle */
 	BUILD_ASSERT(sizeof(llhdr->dhost.addr) == sizeof(netcfg.mac.addr));
@@ -275,12 +276,12 @@ static void net_rx_one(struct mbuf *m)
 	/*
 	 * Network Layer Processing (OSI L3)
 	 */
-    log_info("!! core.c: hello?? | len4=%d\n", mbuf_length(m)); 
+    PRINT_DBG("!! core.c: hello?? | len4=%d\n", mbuf_length(m)); 
 	mbuf_mark_network_offset(m);
 	iphdr = mbuf_pull_hdr_or_null(m, *iphdr);
-    log_info("!! core.c: hello?? | len5=%d\n", mbuf_length(m)); 
+    PRINT_DBG("!! core.c: hello?? | len5=%d\n", mbuf_length(m)); 
 	if (unlikely(!iphdr)) {
-        log_info("core.c: 3\n"); 
+        PRINT_DBG("core.c: 3\n"); 
 		goto drop;
     }
 
@@ -306,18 +307,18 @@ static void net_rx_one(struct mbuf *m)
 
 	switch(iphdr->proto) {
 	case IPPROTO_ICMP:
-        log_info("core.c: IPPROTO_ICMP | len=%d\n", mbuf_length(m)); 
+        PRINT_DBG("core.c: IPPROTO_ICMP | len=%d\n", mbuf_length(m)); 
 		net_rx_icmp(m, iphdr, len);
 		break;
 
 	case IPPROTO_UDP:
 	case IPPROTO_TCP:
-        log_info("core.c: IPPROTO_UDP/TCP | len=%d\n", mbuf_length(m)); 
+        PRINT_DBG("core.c: IPPROTO_UDP/TCP | len=%d\n", mbuf_length(m)); 
 		net_rx_trans(m);
 		break;
 
 	case IPPROTO_DIRECTPATH_ARP_ENCAP:
-        log_info("core.c: IPPROTO_DIRECTPATH_ARP_ENCAP\n"); 
+        PRINT_DBG("core.c: IPPROTO_DIRECTPATH_ARP_ENCAP\n"); 
 		net_rx_arp(m);
 		break;
 
@@ -362,7 +363,7 @@ static void handle_tx_completion(unsigned long payload)
 
 static void iokernel_softirq_poll(struct kthread *k)
 {
-    log_info("!! iokernel_softirq_poll"); 
+    PRINT_DBG("!! iokernel_softirq_poll"); 
 	struct mbuf *m;
 	union rxq_cmd cmd;
 	unsigned long payload;
@@ -371,17 +372,17 @@ static void iokernel_softirq_poll(struct kthread *k)
 		if (!lrpc_recv(&k->rxq, &cmd.lrpc_cmd, &payload))
 			break;
 
-        log_info("!! lrpc_recv: cmd.len=%d", cmd.len); 
+        PRINT_DBG("!! lrpc_recv: cmd.len=%d", cmd.len); 
 		switch (cmd.rxcmd) {
 		case RX_NET_RECV:
-            log_info("!! iokernel_softirq_poll: RX_NET_RECV"); 
+            PRINT_DBG("!! iokernel_softirq_poll: RX_NET_RECV"); 
 			m = net_rx_alloc_mbuf(payload, cmd);
-            log_info("!! iokernel_softirq_poll: allocated msg | len=%d", mbuf_length(m)); 
+            PRINT_DBG("!! iokernel_softirq_poll: allocated msg | len=%d", mbuf_length(m)); 
 			if (unlikely(!m)) {
 				STAT(DROPS)++;
 				continue;
 			}
-            log_info("!! entering net_rx_one | m len=%d", mbuf_length(m)); 
+            PRINT_DBG("!! entering net_rx_one | m len=%d", mbuf_length(m)); 
 			net_rx_one(m);
 			break;
 
@@ -402,7 +403,7 @@ static void iokernel_softirq_poll(struct kthread *k)
 
 static void iokernel_softirq(void *arg)
 {
-    log_info("!! iokernel_softirq");
+    PRINT_DBG("!! iokernel_softirq");
 	struct kthread *k = arg;
 
 	while (true) {
@@ -614,13 +615,13 @@ void print_mbuf(struct mbuf *m) {
 
 static void net_tx_raw(struct mbuf *m)
 {
-    log_info("!! net_tx_raw");
+    PRINT_DBG("!! net_tx_raw");
 	struct kthread *k;
 	unsigned int len = mbuf_length(m);
-    log_info("!! net_tx_raw: buflen=%d", len);
-    log_info("!! buf:");
-    // print_mbuf(m); 
-    print_bytes(m->data, m->len);
+    PRINT_DBG("!! net_tx_raw: buflen=%d", len);
+    PRINT_DBG("!! buf:");
+    // print_mbuf(m);
+    // print_bytes(m->data, m->len);
 
 	k = getk();
 
@@ -637,7 +638,7 @@ static void net_tx_raw(struct mbuf *m)
 		}
 	}
 
-    log_info("!! net_tx_raw: about to call tx_single.");
+    PRINT_DBG("!! net_tx_raw: about to call tx_single.");
 	if (unlikely(net_ops.tx_single(m))) {
 		mbufq_push_tail(&k->txpktq_overflow, m);
 		STAT(TXQ_OVERFLOW)++;
@@ -660,7 +661,7 @@ static void net_tx_raw(struct mbuf *m)
  */
 void net_tx_eth(struct mbuf *m, uint16_t type, const struct eth_addr *dhost, bool is_local)
 {
-    log_info("!! net_tx_eth"); 
+    PRINT_DBG("!! net_tx_eth"); 
 	struct eth_hdr *eth_hdr;
 	eth_hdr = mbuf_push_hdr(m, *eth_hdr);
 	eth_hdr->shost = netcfg.mac;
@@ -758,7 +759,7 @@ static int net_tx_local_loopback(struct mbuf *m_in, uint8_t proto)
  */
 int net_tx_ip(struct mbuf *m, uint8_t proto, uint32_t daddr)
 {
-    log_info("!! net_tx_ip 1"); 
+    PRINT_DBG("!! net_tx_ip 1"); 
 	struct eth_addr dhost = {
         .addr = { 0xB8, 0x59, 0x9F, 0x0B, 0x3B, 0xFF }
         // .addr = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }
@@ -769,15 +770,15 @@ int net_tx_ip(struct mbuf *m, uint8_t proto, uint32_t daddr)
 	/* prepend the IP header */
 	net_push_iphdr(m, proto, daddr);
 	mbuf_mark_network_offset(m);
-    log_info("!! net_tx_ip 2"); 
+    PRINT_DBG("!! net_tx_ip 2"); 
 
 	/* route loopbacks */
 	if (daddr == netcfg.addr) {
-        log_info("!! net_tx_ip: loopback case."); 
-        log_info("!! daddr=%d | netcfg.addr=%d", daddr, netcfg.addr); 
+        PRINT_DBG("!! net_tx_ip: loopback case."); 
+        PRINT_DBG("!! daddr=%d | netcfg.addr=%d", daddr, netcfg.addr); 
 		return net_tx_local_loopback(m, proto);
     }
-    log_info("!! net_tx_ip 3"); 
+    PRINT_DBG("!! net_tx_ip 3"); 
 
 	/* ask NIC to calculate IP checksum */
 	m->txflags |= OLFLAG_IP_CHKSUM | OLFLAG_IPV4;
@@ -790,12 +791,12 @@ int net_tx_ip(struct mbuf *m, uint8_t proto, uint32_t daddr)
 	// if (unlikely(ret)) {
 	// 	if (ret == -EINPROGRESS) {
 	// 		/* ARP code now owns the mbuf */
-    //         log_info("!! net_tx_ip 4: EINPROGRESS"); 
+    //         PRINT_DBG("!! net_tx_ip 4: EINPROGRESS"); 
 	// 		return 0;
 	// 	} else {
 	// 		/* An unrecoverable error occurred */
 	// 		mbuf_pull_hdr(m, struct ip_hdr);
-    //         log_info("!! net_tx_ip 4: err"); 
+    //         PRINT_DBG("!! net_tx_ip 4: err"); 
 	// 		return ret;
 	// 	}
 	// }
@@ -807,7 +808,7 @@ int net_tx_ip(struct mbuf *m, uint8_t proto, uint32_t daddr)
 	// 		              m->tx_l4_dport);
 	// 	m->txflags |= TXFLAG_LOCAL_HINT;
 	// }
-    // log_info("!! calling net_tx_eth"); 
+    // PRINT_DBG("!! calling net_tx_eth"); 
     
 	// net_tx_eth(m, ETHTYPE_IP, &dhost, local);
 	net_tx_eth(m, ETHTYPE_IP, &dhost, false);

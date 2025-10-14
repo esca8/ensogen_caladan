@@ -239,25 +239,25 @@ fn run_spawner_server(addr: SocketAddrV4, workerspec: &str) {
     }
     extern "C" fn echo(d: *mut shenango::ffi::udp_spawn_data) {
         unsafe {
-            println!("echoing data of len {}", (*d).len);
-            let buf = slice::from_raw_parts((*d).buf as *mut u8, (*d).len as usize);
-            println!("Buffer len: {}", buf.len());
-            println!("Hex: {:02x?}", &buf);
-            println!("Full pkt: {:02x?}", (*d)); 
+            // println!("echoing data of len {}", (*d).len);
+            let buf = slice::from_raw_parts((*d).buf as *mut u8, ((*d).len+4) as usize);
+            // println!("Buffer len: {}", buf.len());
+            // println!("Hex: {:02x?}", &buf);
+            // println!("Full pkt: {:02x?}", (*d)); 
             let mut payload = Payload::deserialize(&mut &buf[..]).unwrap();
             let worker = SPAWNER_WORKER.as_ref().unwrap();
-            println!("work_iterations={:?}\n", payload.work_iterations); 
+            // println!("work_iterations={:?}\n", payload.work_iterations); 
             worker.work(payload.work_iterations, payload.randomness);
             // worker.work(0, 0); 
             // payload.randomness = shenango::rdtsc();
-            println!("done working!\n"); 
+            // println!("done working!\n"); 
             let mut array = ArrayVec::<_, PAYLOAD_SIZE>::new();
-            // payload.serialize_into(&mut array).unwrap();
-            format!("start reply... | d.laddr={}, d.raddr={}\n", (*d).laddr.ip, (*d).raddr.ip); 
+            payload.serialize_into(&mut array).unwrap();
+            // format!("start reply... | d.laddr={}, d.raddr={}\n", (*d).laddr.ip, (*d).raddr.ip); 
             let _ = UdpSpawner::reply(d, array.as_slice());
-            println!("end reply...\n"); 
+            // println!("end reply...\n"); 
             UdpSpawner::release_data(d);
-            println!("release data...\n"); 
+            // println!("release data...\n"); 
         }
     }
 

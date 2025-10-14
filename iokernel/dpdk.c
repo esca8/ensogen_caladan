@@ -43,6 +43,7 @@
 #include <rte_lcore.h>
 
 #include <base/log.h>
+#include <base/debug.h>
 
 #include "defs.h"
 #include "sched.h"
@@ -64,7 +65,7 @@ int dpdk_argc;
 struct rte_eth_rss_conf rss_conf;
 bool rss_conf_present;
 
-#define DPDK_PORT 0
+#define DPDK_PORT 1
 
 static const struct rte_eth_conf port_conf_default = {
 	.rxmode = {
@@ -242,6 +243,7 @@ void dpdk_print_eth_stats(void)
  */
 int dpdk_init(void)
 {
+    PRINT_DBG("dpdk_init\n"); 
 	unsigned int max_args;
 	char buf[10], **argv;
 	int i, ret, argc = 0;
@@ -304,11 +306,14 @@ int dpdk_init(void)
 		log_warn("dpdk: too many lcores enabled, only 1 used");
 
 	if (!cfg.vfio_directpath) {
+        PRINT_DBG("NOT directpath enabled\n");
 		dp.port = DPDK_PORT;
 		rte_eth_dev_info_get(DPDK_PORT, &dev_info);
 		dp.device = dev_info.device;
 		dp.iova_mode_pa = rte_eal_iova_mode() == RTE_IOVA_PA;
-	}
+	} else {
+        PRINT_DBG("directpath enabled\n");
+    }
 
 
 	return 0;
@@ -417,7 +422,9 @@ int dpdk_late_init(void)
 	if (dpdk_port_init(dp.port, dp.rx_mbuf_pool) != 0) {
 		log_err("dpdk: cannot init port %"PRIu8 "\n", dp.port);
 		return -1;
-	}
+	} else {
+        PRINT_DBG("successfully init port %"PRIu8 "\n", dp.port);
+    }
 
 	return 0;
 }

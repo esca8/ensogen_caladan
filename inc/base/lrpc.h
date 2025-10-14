@@ -130,11 +130,10 @@ struct lrpc_chan_in {
 static inline bool lrpc_recv(struct lrpc_chan_in *chan, uint64_t *cmd_out,
 			     unsigned long *payload_out)
 {
-    log_warn_ratelimited("!! lrpc_recv");
-        struct lrpc_msg *m = &chan->tbl[chan->recv_head & (chan->size - 1)];
-        uint64_t parity = (chan->recv_head & chan->size) ?
-			  0 : LRPC_DONE_PARITY;
-    log_warn_ratelimited("m: %ld", m->payload);
+    struct lrpc_msg *m = &chan->tbl[chan->recv_head & (chan->size - 1)];
+    uint64_t parity = (chan->recv_head & chan->size) ?
+            0 : LRPC_DONE_PARITY;
+    log_warn_ratelimited("!! lrpc_recv: m: %ld", m->payload);
 	uint64_t cmd;
 
 	cmd = load_acquire(&m->cmd);

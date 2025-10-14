@@ -12,6 +12,7 @@ pub struct Payload {
     pub work_iterations: u64,
     pub index: u64,
     pub randomness: u16,
+    pub padding: u32, 
 }
 
 pub const PAYLOAD_SIZE: usize = 64; /* pkt size */
@@ -29,6 +30,7 @@ impl LoadgenProtocol for SyntheticProtocol {
             work_iterations: p.work_iterations,
             index: i as u64,
             randomness: p.randomness,
+            padding: 0,
         }
         .serialize_into(buf)
         .unwrap();
@@ -65,6 +67,7 @@ impl Payload {
             work_iterations: reader.read_u64::<BigEndian>()?,
             index: reader.read_u64::<BigEndian>()?,
             randomness: reader.read_u16::<BigEndian>()?,
+            padding: 0, 
         };
         return Ok(p);
     }

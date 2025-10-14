@@ -3,6 +3,7 @@
 #include <base/mempool.h>
 #include <runtime/sync.h>
 #include <base/log.h>
+#include <base/debug.h>
 
 #ifdef DIRECTPATH
 

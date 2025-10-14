@@ -183,10 +183,10 @@ impl UdpSpawner {
     }
 
     pub unsafe fn reply(d: *mut ffi::udp_spawn_data, buf: &[u8]) -> io::Result<usize> {
-        println!(" !! from udp.rs: reply | d={:x?}, buf={:x?}\n", d, buf);
+        // println!(" !! from udp.rs: reply | d={:x?}, buf={:x?} |len+4={:x?}\n", d, buf, (*d).len+4);
         isize_to_result(ffi::udp_send(
             buf.as_ptr() as *const c_void,
-            (*d).len as _,
+            ((*d).len+4) as _,
             (*d).laddr,
             (*d).raddr,
         ))

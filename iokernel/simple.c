@@ -4,8 +4,10 @@
 
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 #include <base/stddef.h>
+#include <base/debug.h>
 
 #include "defs.h"
 #include "sched.h"
@@ -145,6 +147,8 @@ static int simple_run_kthread_on_core(struct proc *p, unsigned int core)
 
 static unsigned int simple_choose_core(struct proc *p)
 {
+    PRINT_DBG("from simple.c: simple_choose_core. proc info: \n");
+    proc_print_info(p);
 	struct simple_data *sd = (struct simple_data *)p->policy_data;
 	struct thread *th;
 	unsigned int core, tmp;
@@ -164,12 +168,15 @@ static unsigned int simple_choose_core(struct proc *p)
 	}
 
 	/* then try to find a previously used core (to improve locality) */
+    PRINT_DBG("!! 1. simple_choose_core: try to find a prev used core\n");
 	list_for_each(&p->idle_threads, th, idle_link) {
 		core = th->core;
+        log_warn_ratelimited("!! th=%p, core: %d\n", th, core); 
 		if (core >= NCPU)
 			break;
 		if (cores[core] != sd && (cores[core] == NULL ||
 		    simple_proc_is_preemptible(cores[core], sd))) {
+            PRINT_DBG("!! returning core=%d", core); 
 			return core;
 		}
 
@@ -186,12 +193,16 @@ static unsigned int simple_choose_core(struct proc *p)
 	}
 
 	/* then look for any idle core */
+    PRINT_DBG("2. look for idle core \n");
 	core = bitmap_find_next_set(simple_idle_cores, NCPU, 0);
+    PRINT_DBG("2. core=%d \n", core);
 	if (core != NCPU)
 		return core;
 
 	/* finally look for any preemptible core */
+    PRINT_DBG("3. look for preemptible core \n");
 	sched_for_each_allowed_core(core, tmp) {
+        PRINT_DBG("3. core=%d \n", core);
 		if (cores[core] == sd)
 			continue;
 		if (cores[core] &&
@@ -200,6 +211,7 @@ static unsigned int simple_choose_core(struct proc *p)
 	}
 
 	/* out of luck, couldn't find anything */
+    PRINT_DBG("couldn't find anything...\n");
 	return NCPU;
 }
 
