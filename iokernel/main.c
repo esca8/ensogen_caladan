@@ -124,7 +124,7 @@ void dataplane_loop(void)
 {
     PRINT_DBG("dataplane_loop | dp.port = %d\n", (uint32_t)dp.port);
 	bool work_done;
-#if 0
+#if 1
 	uint64_t next_log_time = microtime();
 #endif
 
@@ -168,10 +168,13 @@ void dataplane_loop(void)
 
 		STAT_INC(LOOPS, 1);
 
-#if 0
+#if 1
 		if (microtime() > next_log_time) {
+            printf("logging\n"); 
 			dpdk_print_eth_stats();
-			next_log_time += LOG_INTERVAL_US;
+			// dpdk_print_xstats();
+			// dpdk_print_directpath_stats();
+			next_log_time += 10 * LOG_INTERVAL_US;
 		}
 #endif
 	}

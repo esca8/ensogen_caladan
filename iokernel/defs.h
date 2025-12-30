@@ -568,6 +568,8 @@ extern void dp_clients_remove_client(struct proc *p);
 extern void dp_clients_rx_control_lrpcs(void);
 extern bool commands_rx(void);
 extern void dpdk_print_eth_stats(void);
+extern void dpdk_print_xstats(void);
+extern void dpdk_print_directpath_stats(void);
 extern int do_dpdk_dma_map(void *buf, size_t len, size_t pgsize,
 	uintptr_t *physaddrs);
 extern void do_dpdk_dma_unmap(void *buf, size_t len, size_t pgsize,

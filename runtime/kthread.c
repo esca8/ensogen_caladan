@@ -7,6 +7,7 @@
 #include <sys/ioctl.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <stdio.h>
 
 #include <base/atomic.h>
 #include <base/cpu.h>
@@ -79,6 +80,9 @@ int kthread_init_thread(void)
 	mykthread->kthread_idx = nrks;
 	ks[nrks++] = mykthread;
 	assert(nrks <= maxks);
+	fprintf(stderr, "[KTHREAD INIT] Kthread %u initialized (total kthreads=%u, maxks=%u)\n",
+	        mykthread->kthread_idx, nrks, maxks);
+	fflush(stderr);
 	spin_unlock_np(&klock);
 
 	perthread_store(kthread_idx, mykthread->kthread_idx);
@@ -156,6 +160,8 @@ again:
 
 	if (!nrawake)
 		goto out;
+
+	log_info("flows_update: %d kthreads awake out of %d", nrawake, maxks);
 
 	pos = 0;
 	bitmap_for_each_cleared(kawake_local, maxks, i) {
@@ -277,11 +283,18 @@ void kthread_park(void)
 
 	STAT(PARKS)++;
 
+	fprintf(stderr, "[KTHREAD %u] PARKING at tsc=%lu (runningks before park=%d, spinks=%d, voluntary=%d)\n",
+	        k->kthread_idx, rdtsc(), remaining_ks, spinks, voluntary);
+	fflush(stderr);
+
 	/* perform the actual parking */
 	kthread_yield_to_iokernel();
 
 	/* iokernel has unparked us */
 	atomic_inc(&runningks);
+	fprintf(stderr, "[KTHREAD %u] WOKE UP at tsc=%lu (runningks after wake=%d)\n",
+	        k->kthread_idx, rdtsc(), atomic_read(&runningks));
+	fflush(stderr);
 
 	flows_notify_waking();
 

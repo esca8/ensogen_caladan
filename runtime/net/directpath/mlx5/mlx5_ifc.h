@@ -135,3 +135,58 @@ union match {
 	};
 	struct mlx5dv_flow_match_parameters params;
 };
+
+/*
+ * Flow counter command opcodes and structures
+ */
+#define MLX5_CMD_OP_ALLOC_FLOW_COUNTER 0x939
+#define MLX5_CMD_OP_DEALLOC_FLOW_COUNTER 0x93a
+#define MLX5_CMD_OP_QUERY_FLOW_COUNTER 0x93b
+
+/* Input for ALLOC_FLOW_COUNTER command */
+struct mlx5_ifc_alloc_flow_counter_in_bits {
+	u8 opcode[0x10];
+	u8 uid[0x10];
+	u8 reserved_at_20[0x10];
+	u8 op_mod[0x10];
+	u8 flow_counter_bulk_log_size[0x8];
+	u8 reserved_at_48[0x18];
+	u8 reserved_at_60[0x20];
+};
+
+/* Output for ALLOC_FLOW_COUNTER command */
+struct mlx5_ifc_alloc_flow_counter_out_bits {
+	u8 status[0x8];
+	u8 reserved_at_8[0x18];
+	u8 syndrome[0x20];
+	u8 flow_counter_id[0x20];
+	u8 reserved_at_60[0x20];
+};
+
+/* Input for QUERY_FLOW_COUNTER command */
+struct mlx5_ifc_query_flow_counter_in_bits {
+	u8 opcode[0x10];
+	u8 uid[0x10];
+	u8 reserved_at_20[0x10];
+	u8 op_mod[0x10];
+	u8 reserved_at_40[0x80];
+	u8 clear[0x1];
+	u8 reserved_at_c1[0xf];
+	u8 num_of_counters[0x10];
+	u8 flow_counter_id[0x20];
+};
+
+/* Traffic counter (packets and bytes) */
+struct mlx5_ifc_traffic_counter_bits {
+	u8 packets[0x40];
+	u8 octets[0x40];
+};
+
+/* Output for QUERY_FLOW_COUNTER command */
+struct mlx5_ifc_query_flow_counter_out_bits {
+	u8 status[0x8];
+	u8 reserved_at_8[0x18];
+	u8 syndrome[0x20];
+	u8 reserved_at_40[0x40];
+	/* flow_statistics follows (traffic_counter) */
+};

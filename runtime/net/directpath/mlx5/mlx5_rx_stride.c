@@ -9,6 +9,10 @@
 
 #include <util/mmio.h>
 #include <util/udma_barrier.h>
+#include <net/ethernet.h>
+#include <net/ip.h>
+#include <net/udp.h>
+#include <net/tcp.h>
 
 #include "mlx5.h"
 
@@ -291,6 +295,13 @@ static __noinline void panic_error_cqe(struct mlx5_cqe64 *cqe, uint8_t opcode)
 	panic("got opcode %02X syndrome %x", opcode, ecqe->syndrome);
 }
 
+static inline void print_ip(uint32_t ip)
+{
+	fprintf(stderr, "%u.%u.%u.%u",
+	        (ip >> 24) & 0xff, (ip >> 16) & 0xff,
+	        (ip >> 8) & 0xff, ip & 0xff);
+}
+
 static struct mbuf *mbuf_fill_cqe(void *dbuf, struct mlx5_cqe64 *cqe,
 	                              uint32_t len, uint64_t num_strides)
 {
@@ -353,6 +364,15 @@ int mlx5_gather_rx_strided(struct mlx5_rxq *v, struct mbuf **ms,
 		if (unlikely(opcode != MLX5_CQE_RESP_SEND))
 			panic_error_cqe(cqe, opcode);
 
+		/* Debug: Print every valid CQE with RSS hash */
+		static uint64_t cqe_count = 0;
+		if (++cqe_count % 10000 == 0) {
+			uint32_t rss_hash = mlx5_get_rss_result(cqe);
+			// fprintf(stderr, "[CQE POLL] Queue %u: CQE #%lu, RSS hash = 0x%08x\n",
+			//         k->kthread_idx, cqe_count, rss_hash);
+			fflush(stderr);
+		}
+
 		v->cq.head++;
 		prefetch(&v->cq.cqes[v->cq.head & (v->cq.cnt - 1)]);
 
@@ -381,6 +401,11 @@ int mlx5_gather_rx_strided(struct mlx5_rxq *v, struct mbuf **ms,
 		cqes[rx_cnt++] = cqe;
 	}
 
+	/* Port statistics tracking */
+	static uint64_t port_stats[15] = {0};
+	static uint64_t total_tracked = 0;
+	static uint64_t unknown_port_count = 0;
+
 	for (i = 0; i < rx_cnt; i++) {
 		cqe = cqes[i];
 		buf = bufs[i];
@@ -388,6 +413,19 @@ int mlx5_gather_rx_strided(struct mlx5_rxq *v, struct mbuf **ms,
 		stride_cnt = (byte_cnts[i] & MLX5_MPRQ_STRIDE_NUM_MASK) >>
 				   MLX5_MPRQ_STRIDE_NUM_SHIFT;
 		len = byte_cnts[i] & MLX5_MPRQ_LEN_MASK;
+
+		/* Print RSS hash for first packet in batch */
+		if (i == 0) {
+			static uint64_t total_pkts = 0;
+			total_pkts += rx_cnt;
+			// if (total_pkts % 10000 < rx_cnt) {
+			// 	uint32_t rss_hash = mlx5_get_rss_result(cqe);
+			// 	fprintf(stderr, "[RUNTIME STRIDED] Queue %u: RSS hash = 0x%08x (batch %d pkts, total %lu)\n",
+			// 	        k->kthread_idx, rss_hash, rx_cnt, total_pkts);
+			// 	fflush(stderr);
+			// }
+		}
+
 		ms[i] = mbuf_fill_cqe(buf, cqe, len, stride_cnt);
 		if (unlikely(!ms[i])) {
 			// drop remaining packets
@@ -397,6 +435,60 @@ int mlx5_gather_rx_strided(struct mlx5_rxq *v, struct mbuf **ms,
 			rx_cnt = i;
 			break;
 		}
+
+		/* Parse destination port for statistics */
+		uint16_t dst_port = 0, src_port = 0;
+		unsigned char *pkt_data = mbuf_data(ms[i]);
+		struct eth_hdr *eth = (struct eth_hdr *)pkt_data;
+
+		if (ntoh16(eth->type) == ETHTYPE_IP) {
+			struct ip_hdr *ip = (struct ip_hdr *)(pkt_data + sizeof(struct eth_hdr));
+			uint32_t src_ip = ntoh32(ip->saddr);
+			uint32_t dst_ip = ntoh32(ip->daddr);
+			uint8_t proto = ip->proto;
+
+			if (ip->proto == IPPROTO_UDP) {
+				struct udp_hdr *udp = (struct udp_hdr *)((unsigned char *)ip + sizeof(struct ip_hdr));
+				src_port = ntoh16(udp->src_port);
+				dst_port = ntoh16(udp->dst_port);
+			} else if (ip->proto == IPPROTO_TCP) {
+				struct tcp_hdr *tcp = (struct tcp_hdr *)((unsigned char *)ip + sizeof(struct ip_hdr));
+				src_port = ntoh16(tcp->sport);
+				dst_port = ntoh16(tcp->dport);
+			}
+
+			/* Track statistics - assume ports are in range [5000, 5014] */
+			if (dst_port >= 80 && dst_port < 95) {
+				port_stats[dst_port - 80]++;
+				total_tracked++;
+			} else if (dst_port > 0) {
+				unknown_port_count++;
+			}
+
+			/* Print 5-tuple for debugging */
+			static uint64_t pkt_print_count = 0;
+			if (pkt_print_count++ % 1000 == 0) {
+				fprintf(stderr, "[5-TUPLE] Pkt #%lu: ", pkt_print_count);
+				print_ip(src_ip);
+				fprintf(stderr, ":%u -> ", src_port);
+				print_ip(dst_ip);
+				fprintf(stderr, ":%u proto=%u\n", dst_port, proto);
+				fflush(stderr);
+			}
+		}
+	}
+
+	/* Print statistics every 100 packets */
+	if (total_tracked > 0 && total_tracked % 10 == 0) {
+		fprintf(stderr, "\n[PORT STATS STRIDED] Total tracked: %lu, Unknown ports: %lu\n",
+		        total_tracked, unknown_port_count);
+		for (int j = 0; j < 15; j++) {
+			if (port_stats[j] > 0) {
+				fprintf(stderr, "  Port %d: %lu packets\n", 80 + j, port_stats[j]);
+			}
+		}
+		fprintf(stderr, "\n");
+		fflush(stderr);
 	}
 
 	if (start_head != v->cq.head) {

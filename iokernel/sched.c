@@ -12,6 +12,7 @@
 #include <base/log.h>
 #include <base/cpu.h>
 #include <base/debug.h>
+#include <stdio.h>
 
 #include <iokernel/directpath.h>
 #include <iokernel/queue.h>
@@ -149,7 +150,7 @@ static void sched_steer_flows(struct proc *p)
 
 static void sched_enable_kthread(struct proc *p, struct thread *th, unsigned int core)
 {
-    PRINT_DBG("sched_enable_kthread | core: %d | tid: %d | idle_link: %p\n", th->core, th->tid, &th->idle_link);
+    // printf("sched_enable_kthread | core: %d | tid: %d | idle_link: %p\n", th->core, th->tid, &th->idle_link);
 	ACCESS_ONCE(th->q_ptrs->curr_grant_gen) = ++th->wake_gen;
 	thread_enable_sched_poll(th);
 	proc_enable_sched_poll(p);
@@ -165,8 +166,7 @@ static void sched_enable_kthread(struct proc *p, struct thread *th, unsigned int
 		th->at_idx = p->active_thread_count;
 		p->active_threads[p->active_thread_count++] = th;
 		poll_thread(th);
-		if (!p->has_directpath)
-			sched_steer_flows(p);
+		sched_steer_flows(p);
 	}
 
 	if (unlikely(!p->started))
@@ -175,7 +175,7 @@ static void sched_enable_kthread(struct proc *p, struct thread *th, unsigned int
 
 static void sched_disable_kthread(struct thread *th, unsigned int last_core)
 {
-    PRINT_DBG("sched_disable_kthread | core: %d | tid: %d | idle_link: %p\n", th->core, th->tid, &th->idle_link);
+    // printf("sched_disable_kthread | core: %d | tid: %d | idle_link: %p\n", th->core, th->tid, &th->idle_link);
 	struct proc *p = th->p;
     PRINT_DBG("proc info: ");
     proc_print_info(p); 
@@ -189,11 +189,10 @@ static void sched_disable_kthread(struct thread *th, unsigned int last_core)
 	th->change_tsc = cur_tsc;
 	p->last_core[th - p->threads] = last_core;
 	list_add(&p->idle_threads, &th->idle_link);
-	if (!p->has_directpath)
-		sched_steer_flows(p);
 	if (!p->has_vfio_directpath) {
 		p->active_threads[th->at_idx] = p->active_threads[--p->active_thread_count];
 		p->active_threads[th->at_idx]->at_idx = th->at_idx;
+		sched_steer_flows(p);
 		if (lrpc_empty(&th->txpktq) && lrpc_empty(&th->txcmdq))
 			unpoll_thread(th);
 	} else {
@@ -888,6 +887,7 @@ void sched_poll(void)
  */
 int sched_add_core(struct proc *p)
 {
+    printf("Adding core for process p\n");
 	if (cfg.noidlefastwake) {
 		proc_enable_sched_poll(p);
 		return 0;
@@ -907,6 +907,7 @@ int sched_attach_proc(struct proc *p)
 	int i, ret;
 
 	if (p->sched_cfg.guaranteed_cores + nr_guaranteed > sched_cores_nr) {
+        log_info("guaranteed: %d. %d. sched cores: %d", p->sched_cfg.guaranteed_cores, nr_guaranteed, sched_cores_nr); 
 		log_err("guaranteed cores exceeds total core count");
 		return -1;
 	}

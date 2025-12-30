@@ -41,7 +41,7 @@ static int dp_clients_setup_flow_tags(struct proc *p)
 
 	if (!rss_conf_present)
 		return 0;
-
+    
 	memset(&attr, 0, sizeof(attr));
 	attr.ingress = 1;
 
@@ -74,12 +74,29 @@ static int dp_clients_setup_flow_tags(struct proc *p)
 	actions[1].conf = &mark_action;
 	actions[2].type = RTE_FLOW_ACTION_TYPE_END;
 
+	fprintf(stderr, "\n=== IOkernel Creating DPDK Flow Rule ===\n");
+	fprintf(stderr, "  Priority: %u (attr.priority, 0=highest)\n", attr.priority);
+	fprintf(stderr, "  Match: dst_ip=%u.%u.%u.%u\n",
+	        (p->ip_addr >> 24) & 0xff, (p->ip_addr >> 16) & 0xff,
+	        (p->ip_addr >> 8) & 0xff, p->ip_addr & 0xff);
+	fprintf(stderr, "  Action: RSS to queue 0\n");
+	fflush(stderr);
+
 	ret = rte_flow_validate(dp.port, &attr, pattern, actions, NULL);
-	if (unlikely(ret))
+	if (unlikely(ret)) {
+		fprintf(stderr, "  VALIDATION FAILED: ret=%d\n", ret);
+		fflush(stderr);
 		return ret;
+	}
 	p->flow = rte_flow_create(dp.port, &attr, pattern, actions, NULL);
-	if (unlikely(!p->flow))
+	if (unlikely(!p->flow)) {
+		fprintf(stderr, "  CREATION FAILED\n");
+		fflush(stderr);
 		return -1;
+	}
+	fprintf(stderr, "  SUCCESS: flow=%p\n", p->flow);
+	fprintf(stderr, "==========================================\n\n");
+	fflush(stderr);
 	return 0;
 }
 
@@ -129,7 +146,17 @@ static void dp_clients_add_client(struct proc *p)
 		goto fail;
 	}
 
+	fprintf(stderr, "\n=== dp_clients_add_client (pid=%d) ===\n", p->pid);
+	fprintf(stderr, "  ip_addr=%u.%u.%u.%u\n",
+	        (p->ip_addr >> 24) & 0xff, (p->ip_addr >> 16) & 0xff,
+	        (p->ip_addr >> 8) & 0xff, p->ip_addr & 0xff);
+	fprintf(stderr, "  has_directpath=%u, has_vfio_directpath=%u\n",
+	        p->has_directpath, p->has_vfio_directpath);
+	fflush(stderr);
+
 	if (!p->has_directpath) {
+		fprintf(stderr, "  -> Creating DPDK rte_flow rule (non-directpath mode)\n");
+		fflush(stderr);
 		ret = do_dpdk_dma_map(p->region.base, p->region.len,
 			              proc_pgsize(p), p->page_paddrs);
 		if (ret < 0) {
@@ -140,6 +167,9 @@ static void dp_clients_add_client(struct proc *p)
 		ret = dp_clients_setup_flow_tags(p);
 		if (ret < 0)
 			log_warn_once("dp_clients: flow tags unavailable");
+	} else {
+		fprintf(stderr, "  -> SKIPPING DPDK rte_flow rule (directpath mode - runtime handles steering)\n");
+		fflush(stderr);
 	}
 
 	if (p->has_vfio_directpath)

@@ -4,11 +4,14 @@
 
 #ifdef DIRECTPATH
 
+#include <stdio.h>
 #include <base/log.h>
+#include <base/time.h>
 
 #include "mlx5.h"
 
 bool cfg_directpath_strided = false;
+uint64_t prev_print_time = 0; 
 
 static int null_register_flow(unsigned int a, struct trans_entry *e, void **h)
 {
@@ -47,10 +50,16 @@ static void mlx5_softirq_strided(void *arg)
 	struct mlx5_rxq *v = arg;
 	struct mbuf *ms[RUNTIME_RX_BATCH_SIZE];
 
+	// fprintf(stderr, "[SOFTIRQ STRIDED] Thread ENTRY POINT\n");
+	fflush(stderr);
+
 	while (true) {
 		cnt = mlx5_gather_rx_strided(v, ms, RUNTIME_RX_BATCH_SIZE);
-		if (cnt)
+		if (cnt) {
+			// fprintf(stderr, "[SOFTIRQ STRIDED] Processing %d packets\n", cnt);
+			fflush(stderr);
 			net_rx_batch(ms, cnt);
+		}
 		preempt_disable();
 		v->poll_th = thread_self();
 		thread_park_and_preempt_enable();
@@ -73,10 +82,111 @@ static void mlx5_softirq(void *arg)
 	}
 }
 
+void mlx5_print_queue_stats(void)
+{
+	static uint64_t last_print_tsc = 0;
+	uint64_t now_tsc = rdtsc();
+	uint64_t total_rx_packets = 0, total_rx_bytes = 0;
+	uint64_t total_tx_packets = 0, total_tx_bytes = 0;
+	int i;
+
+	/* Print stats every 2 seconds */
+	if (now_tsc - last_print_tsc < (uint64_t)(cycles_per_us) * 5000000)
+		return;
+	last_print_tsc = now_tsc;
+
+	fprintf(stderr, "\n=== Runtime Directpath Queue Stats at %lu us ===\n",
+	        now_tsc / cycles_per_us);
+	fprintf(stderr, "  Max queues: %d\n", maxks);
+
+	fprintf(stderr, "\n  Per-Queue Status:\n");
+	fprintf(stderr, "  Queue | RX Packets | RX Bytes   | TX Packets | TX Bytes   \n");
+	fprintf(stderr, "  ------|------------|------------|------------|------------\n");
+
+	for (i = 0; i < maxks; i++) {
+		struct mlx5_rxq *rxq = &rxqs[i];
+		struct mlx5_txq *txq = &txqs[i];
+
+		fprintf(stderr, "  %5d | %10lu | %10lu | %10lu | %10lu\n",
+		        i,
+		        rxq->rx_packets,
+		        rxq->rx_bytes,
+		        txq->tx_packets,
+		        txq->tx_bytes);
+
+		total_rx_packets += rxq->rx_packets;
+		total_rx_bytes += rxq->rx_bytes;
+		total_tx_packets += txq->tx_packets;
+		total_tx_bytes += txq->tx_bytes;
+	}
+
+	fprintf(stderr, "  ------|------------|------------|------------|------------\n");
+	fprintf(stderr, "  TOTAL | %10lu | %10lu | %10lu | %10lu\n",
+	        total_rx_packets, total_rx_bytes, total_tx_packets, total_tx_bytes);
+	fprintf(stderr, "\n");
+	fflush(stderr);
+
+}
+
+void mlx5_print_kthread_stats(char *caller)
+{
+	uint64_t now_tsc = rdtsc();
+	uint64_t total_rx_packets = 0, total_rx_bytes = 0;
+	uint64_t total_tx_packets = 0, total_tx_bytes = 0;
+	uint64_t total_drops = 0, total_hw_drops = 0;
+	int i;
+
+	/* Print stats every 5 seconds */
+	if ((uint64_t)(now_tsc - prev_print_time) < (uint64_t)(cycles_per_us) * 5000000) {
+		return;
+    }
+	prev_print_time = now_tsc;
+
+	fprintf(stderr, "\n=== Runtime Per-Kthread Stats at %lu us [%s] ===\n",
+	        now_tsc / cycles_per_us, caller);
+	fprintf(stderr, "  Max kthreads: %d\n", maxks);
+
+	fprintf(stderr, "\n  Per-Kthread Status:\n");
+	fprintf(stderr, "  KThr | State  | RX Packets | RX Bytes   | TX Packets | TX Bytes   | SW Drops | HW Drops\n");
+	fprintf(stderr, "  -----|--------|------------|------------|------------|------------|----------|----------\n");
+
+	for (i = 0; i < maxks; i++) {
+		struct kthread *k = ks[i];
+		const char *state = ACCESS_ONCE(k->parked) ? "PARKED" : "ACTIVE";
+		uint64_t rx_pkts = k->stats[STAT_RX_PACKETS];
+		uint64_t rx_bytes = k->stats[STAT_RX_BYTES];
+		uint64_t tx_pkts = k->stats[STAT_TX_PACKETS];
+		uint64_t tx_bytes = k->stats[STAT_TX_BYTES];
+		uint64_t drops = k->stats[STAT_DROPS];
+		uint64_t hw_drops = k->stats[STAT_RX_HW_DROP];
+
+		fprintf(stderr, "  %4d | %6s | %10lu | %10lu | %10lu | %10lu | %8lu | %8lu\n",
+		        i, state, rx_pkts, rx_bytes, tx_pkts, tx_bytes, drops, hw_drops);
+
+		total_rx_packets += rx_pkts;
+		total_rx_bytes += rx_bytes;
+		total_tx_packets += tx_pkts;
+		total_tx_bytes += tx_bytes;
+		total_drops += drops;
+		total_hw_drops += hw_drops;
+	}
+
+	fprintf(stderr, "  -----|--------|------------|------------|------------|------------|----------|----------\n");
+	fprintf(stderr, "  TOTAL|        | %10lu | %10lu | %10lu | %10lu | %8lu | %8lu\n",
+	        total_rx_packets, total_rx_bytes, total_tx_packets, total_tx_bytes, total_drops, total_hw_drops);
+	fprintf(stderr, "\n");
+	fflush(stderr);
+
+}
+
 bool mlx5_rx_poll(unsigned int q_index)
 {
 	struct mlx5_rxq *v = &rxqs[q_index];
 	thread_t *th = v->poll_th;
+
+	/* Print stats periodically (do this FIRST, before any early returns) */
+	mlx5_print_queue_stats();
+	mlx5_print_kthread_stats("poll orig");
 
 	if (!th || !mlx5_rxq_pending(v))
 		return false;
@@ -85,6 +195,7 @@ bool mlx5_rx_poll(unsigned int q_index)
 		return false;
 
 	thread_ready_head(th);
+
 	return true;
 }
 
@@ -93,6 +204,11 @@ bool mlx5_rx_poll_locked(unsigned int q_index)
 	struct mlx5_rxq *v = &rxqs[q_index];
 	thread_t *th = v->poll_th;
 
+	/* Print stats periodically (do this FIRST, before any early returns) */
+	// mlx5_print_queue_stats();
+	mlx5_print_kthread_stats("locked");
+    fflush(stderr);
+
 	if (!th || !mlx5_rxq_pending(v))
 		return false;
 
@@ -100,6 +216,7 @@ bool mlx5_rx_poll_locked(unsigned int q_index)
 		return false;
 
 	thread_ready_head_locked(th);
+
 	return true;
 }
 
@@ -120,14 +237,27 @@ int mlx5_init_thread(void)
 	struct hardware_queue_spec *hs;
 	struct mlx5_rxq *v = &rxqs[k->kthread_idx];
 
+	fprintf(stderr, "[MLX5_INIT_THREAD] Called for kthread %u\n", k->kthread_idx);
+	fflush(stderr);
+
 	v->shadow_tail = &k->q_ptrs->directpath_rx_tail;
 
-	if (cfg_directpath_strided)
+	if (cfg_directpath_strided) {
+		fprintf(stderr, "[MLX5_INIT_THREAD] Creating strided softirq thread\n");
+		fflush(stderr);
 		v->poll_th = thread_create(mlx5_softirq_strided, v);
-	else
+	} else {
+		fprintf(stderr, "[MLX5_INIT_THREAD] Creating regular softirq thread\n");
+		fflush(stderr);
 		v->poll_th = thread_create(mlx5_softirq, v);
-	if (!v->poll_th)
+	}
+	if (!v->poll_th) {
+		fprintf(stderr, "[MLX5_INIT_THREAD] ERROR: thread_create failed!\n");
+		fflush(stderr);
 		return -ENOMEM;
+	}
+	fprintf(stderr, "[MLX5_INIT_THREAD] Thread created successfully\n");
+	fflush(stderr);
 
 	ret = mlx5_rx_stride_init_thread();
 	if (ret)
@@ -153,6 +283,7 @@ int mlx5_init_thread(void)
 
 int mlx5_init(void)
 {
+    printf("mlx5_init\n");
 	int ret;
 
 	/* Install default handlers, different configurations may override */
@@ -164,20 +295,28 @@ int mlx5_init(void)
 
 	if (netcfg.directpath_mode == DIRECTPATH_MODE_EXTERNAL) {
 		// hardware queue information will be provided later by the iokernel
-		if (cfg_directpath_strided)
+		if (cfg_directpath_strided) {
 			cfg_request_hardware_queues = DIRECTPATH_REQUEST_STRIDED_RMP;
-		else
+			fprintf(stderr, "=== MLX5 INIT: EXTERNAL MODE + STRIDED RX ===\n");
+		} else {
 			cfg_request_hardware_queues = DIRECTPATH_REQUEST_REGULAR;
+			fprintf(stderr, "=== MLX5 INIT: EXTERNAL MODE + REGULAR RX ===\n");
+		}
+		fprintf(stderr, "[MLX5_INIT] mlx5_init() complete, waiting for per-kthread init\n");
+		fflush(stderr);
 		log_err("directpath_init: selected external mode");
 		return 0;
 	}
 
 	if (netcfg.directpath_mode == DIRECTPATH_MODE_FLOW_STEERING ||
 	    netcfg.directpath_mode == DIRECTPATH_MODE_ALLOW_ANY) {
+        printf("mlx5_init_common.c: flow steering case\n"); 
 
 		/* try to initialize in DevX mode */
 		ret = mlx5_verbs_init_context(false);
+        printf("ret: %d\n", ret);
 		if (ret == 0 && mlx5_sw_flow_steering_early_init()) {
+            printf("try to initialize in DevX mode\n");
 			netcfg.directpath_mode = DIRECTPATH_MODE_FLOW_STEERING;
 			log_err("directpath_init: selected flow steering mode");
 
@@ -189,6 +328,7 @@ int mlx5_init(void)
 		}
 	}
 
+    printf("continued\n");
 	assert(netcfg.directpath_mode == DIRECTPATH_MODE_QUEUE_STEERING ||
 	       netcfg.directpath_mode == DIRECTPATH_MODE_ALLOW_ANY);
 

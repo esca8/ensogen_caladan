@@ -326,6 +326,9 @@ static int mlx5_create_rxq_verbs(int index, struct mlx5_rxq *v, bool use_rss)
 		rx_qps[index] = ibv_create_qp_ex(context, &qp_ex_attr);
 		if (!rx_qps[index])
 			return -errno;
+		fprintf(stderr, "[MLX5_INIT] RX QP %u created with qp_num=%u\n",
+		        index, rx_qps[index]->qp_num);
+		fflush(stderr);
 	} else {
 		rx_wqs[index] = rx_wq;
 	}

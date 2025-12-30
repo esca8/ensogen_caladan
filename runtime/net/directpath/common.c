@@ -8,6 +8,7 @@
 #ifdef DIRECTPATH
 
 #include "defs.h"
+#include "mlx5/mlx5.h"
 
 /* configuration options */
 struct pci_addr nic_pci_addr;
@@ -192,12 +193,19 @@ void deregister_flow(struct flow_registration *f)
 
 int directpath_init_late(void)
 {
+	int ret;
+
 	if (netcfg.directpath_mode != DIRECTPATH_MODE_FLOW_STEERING)
 		return 0;
 
 	flow_worker_th = thread_create(flow_registration_worker, NULL);
 	if (!flow_worker_th)
 		return -ENOMEM;
+
+	/* Start the periodic flow counter monitor */
+	ret = mlx5_start_flow_counter_monitor();
+	if (ret)
+		log_warn("directpath: failed to start flow counter monitor, ret=%d", ret);
 
 	return 0;
 }

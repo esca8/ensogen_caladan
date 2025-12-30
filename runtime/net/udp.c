@@ -595,8 +595,19 @@ static void udp_par_recv(struct trans_entry *e, struct mbuf *m)
 	const struct udp_hdr *udphdr;
 	struct udp_spawn_data *d;
 	thread_t *th;
+	uint32_t timestamp;
+	uint64_t cycles;
 
 	iphdr = mbuf_network_hdr(m, *iphdr);
+
+	/* Retrieve cycles from mbuf (saved by net_rx_one before headers stripped) */
+	cycles = m->timestamp;
+
+	/* Read 32-bit timestamp from IP header offset 4 (id + off fields) */
+	const uint8_t *ip_bytes = (const uint8_t *)iphdr;
+	timestamp = *(uint32_t*)(ip_bytes + 4);
+	timestamp = ntoh32(timestamp);
+
 	udphdr = mbuf_pull_hdr_or_null(m, *udphdr);
 	if (unlikely(!udphdr)) {
 		mbuf_free(m);
@@ -616,6 +627,19 @@ static void udp_par_recv(struct trans_entry *e, struct mbuf *m)
 	d->raddr.ip = ntoh32(iphdr->saddr);
 	d->raddr.port = ntoh16(udphdr->src_port);
 	d->release_data = m;
+
+	/* Write cycles to payload offset 0 (as 64-bit big-endian) */
+	if (d->len >= 8) {
+		uint64_t *payload_cycles = (uint64_t*)((uint8_t*)d->buf);
+		*payload_cycles = hton64(cycles);
+	}
+
+	/* Write timestamp to payload offset 8 (as 64-bit big-endian) */
+	if (d->len >= 16) {
+		uint64_t *payload_ts = (uint64_t*)((uint8_t*)d->buf + 8);
+		*payload_ts = hton64((uint64_t)timestamp);
+	}
+
 	thread_ready(th);
 }
 
@@ -641,12 +665,13 @@ static void udp_release_spawner_ref(struct kref *ref)
  * udp_create_spawner - creates a UDP spawner for ingress datagrams
  * @laddr: the local address to bind to
  * @fn: a handler function for each datagram
+ * @affinity: the kthread affinity (direct routes packets to this kthread's queue)
  * @s_out: if successful, set to a pointer to the spawner
  *
  * Returns 0 if successful, otherwise fail.
  */
 int udp_create_spawner(struct netaddr laddr, udpspawn_fn_t fn,
-		       udpspawner_t **s_out)
+		       unsigned int affinity, udpspawner_t **s_out)
 {
 	udpspawner_t *s;
 	int ret;
@@ -670,7 +695,8 @@ int udp_create_spawner(struct netaddr laddr, udpspawn_fn_t fn,
 		return ret;
 	}
 
-	s->flow.kthread_affinity = 0;
+	s->flow.kthread_affinity = affinity;
+	log_info("udp_create_spawner: port %u -> affinity %u", laddr.port, affinity);
 	s->flow.e = &s->e;
 	s->flow.ref = &s->ref;
 	s->flow.release = udp_release_spawner_ref;

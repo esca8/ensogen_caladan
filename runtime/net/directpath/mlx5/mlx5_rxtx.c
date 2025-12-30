@@ -9,6 +9,10 @@
 #include <runtime/preempt.h>
 #include <util/mmio.h>
 #include <util/udma_barrier.h>
+#include <net/ethernet.h>
+#include <net/ip.h>
+#include <net/udp.h>
+#include <net/tcp.h>
 
 #include "mlx5.h"
 
@@ -231,7 +235,6 @@ static int mlx5_gather_completions(struct mbuf **mbufs, struct mlx5_txq *v,
  */
 int mlx5_transmit_one(struct mbuf *m)
 {
-    // log_info("!! mlx5_transmit_one");
 	struct kthread *k;
 	struct mlx5_txq *v;
 	struct mbuf *mbs[SQ_CLEAN_MAX];
@@ -287,6 +290,10 @@ int mlx5_transmit_one(struct mbuf *m)
 
 	v->bf_offset ^= v->bf_size;
 
+	/* Track TX statistics */
+	v->tx_packets++;
+	v->tx_bytes += mbuf_length(m);
+
 	putk();
 
 	return 0;
@@ -310,6 +317,9 @@ int mlx5_gather_rx(struct mlx5_rxq *v, struct mbuf **ms, unsigned int budget)
 	uint8_t opcode;
 	uint16_t wqe_idx;
 	int rx_cnt;
+	uint32_t pkt_len;
+	static uint64_t total_pkts = 0;
+	static uint64_t last_print = 0;
 
 	struct mlx5_cqe64 *cqe;
 	struct mbuf *m;
@@ -321,11 +331,28 @@ int mlx5_gather_rx(struct mlx5_rxq *v, struct mbuf **ms, unsigned int budget)
 		if (opcode == MLX5_CQE_INVALID)
 			break;
 
+		total_pkts++;
+		if (total_pkts % 100 == 0) {
+			fprintf(stderr, "[MLX5_RX] Hardware queue received %lu packets (kthread=%u)\n",
+			        total_pkts, myk()->kthread_idx);
+			fflush(stderr);
+			last_print = total_pkts;
+		}
+
 		v->cq.head++;
 		prefetch(&v->cq.cqes[v->cq.head & (v->cq.cnt - 1)]);
 
 		if (unlikely(opcode != MLX5_CQE_RESP_SEND))
 			panic_error_cqe(cqe, opcode);
+
+		/* Debug: Print every valid CQE with RSS hash */
+		static uint64_t cqe_count = 0;
+		if (cqe_count++ % 10 == 0) {
+			uint32_t rss_hash = mlx5_get_rss_result(cqe);
+			fprintf(stderr, "[CQE POLL REGULAR] Queue %u: CQE #%lu, RSS hash = 0x%08x\n",
+			        myk()->kthread_idx, cqe_count, rss_hash);
+			fflush(stderr);
+		}
 
 		STAT(RX_HW_DROP) += be32toh(cqe->sop_drop_qpn) >> 24;
 
@@ -333,6 +360,53 @@ int mlx5_gather_rx(struct mlx5_rxq *v, struct mbuf **ms, unsigned int budget)
 		m = v->wq.buffers[wqe_idx];
 		mbuf_fill_cqe(m, cqe);
 		ms[rx_cnt] = m;
+
+		/* Track RX statistics */
+		pkt_len = be32toh(cqe->byte_cnt);
+		v->rx_packets++;
+		v->rx_bytes += pkt_len;
+
+		/* Parse destination port for statistics */
+		static uint64_t port_stats[15] = {0};
+		static uint64_t total_tracked = 0;
+		static uint64_t unknown_port_count = 0;
+		uint16_t dst_port = 0;
+
+		unsigned char *pkt_data = mbuf_data(m);
+		struct eth_hdr *eth = (struct eth_hdr *)pkt_data;
+
+		if (ntoh16(eth->type) == ETHTYPE_IP) {
+			struct ip_hdr *ip = (struct ip_hdr *)(pkt_data + sizeof(struct eth_hdr));
+
+			if (ip->proto == IPPROTO_UDP) {
+				struct udp_hdr *udp = (struct udp_hdr *)((unsigned char *)ip + sizeof(struct ip_hdr));
+				dst_port = ntoh16(udp->dst_port);
+			} else if (ip->proto == IPPROTO_TCP) {
+				struct tcp_hdr *tcp = (struct tcp_hdr *)((unsigned char *)ip + sizeof(struct ip_hdr));
+				dst_port = ntoh16(tcp->dport);
+			}
+
+			/* Track statistics - assume ports are in range [5000, 5014] */
+			if (dst_port >= 5000 && dst_port < 5015) {
+				port_stats[dst_port - 5000]++;
+				total_tracked++;
+			} else if (dst_port > 0) {
+				unknown_port_count++;
+			}
+		}
+
+		/* Print statistics every 1000 packets */
+		if (total_tracked > 0 && total_tracked % 1000 == 0) {
+			fprintf(stderr, "\n[PORT STATS] Total tracked: %lu, Unknown ports: %lu\n",
+			        total_tracked, unknown_port_count);
+			for (int i = 0; i < 15; i++) {
+				if (port_stats[i] > 0) {
+					fprintf(stderr, "  Port %d: %lu packets\n", 5000 + i, port_stats[i]);
+				}
+			}
+			fprintf(stderr, "\n");
+			fflush(stderr);
+		}
 	}
 
 	if (unlikely(!rx_cnt))

@@ -40,6 +40,7 @@
 #include <rte_eal.h>
 #include <rte_ethdev.h>
 #include <rte_ether.h>
+#include <rte_flow.h>
 #include <rte_lcore.h>
 
 #include <base/log.h>
@@ -71,7 +72,7 @@ static const struct rte_eth_conf port_conf_default = {
 	.rxmode = {
 		.mtu = IOKERNEL_MTU,
 		.offloads = RTE_ETH_RX_OFFLOAD_IPV4_CKSUM,
-		.mq_mode = RTE_ETH_MQ_RX_RSS | RTE_ETH_MQ_RX_RSS_FLAG,
+		.mq_mode = RTE_ETH_MQ_RX_NONE, // RTE_ETH_MQ_RX_RSS | RTE_ETH_MQ_RX_RSS_FLAG,
 	},
 	.rx_adv_conf = {
 		.rss_conf = {
@@ -105,6 +106,7 @@ static inline int dpdk_port_init(uint8_t port, struct rte_mempool *mbuf_pool)
 	rte_eth_dev_info_get(port, &dev_info);
 	rxconf = &dev_info.default_rxconf;
 	rxconf->rx_free_thresh = 64;
+	rxconf->offloads = port_conf.rxmode.offloads;
 
 	bool is_mlx5 =
 	       !strncmp(dev_info.driver_name, "mlx5_pci",
@@ -138,10 +140,38 @@ static inline int dpdk_port_init(uint8_t port, struct rte_mempool *mbuf_pool)
 	if (!strncmp(dev_info.driver_name, "net_bnxt", strlen("net_bnxt")))
 		iok_info->min_pkt_size = 52;
 
+	/* Log device offload capabilities */
+	log_info("Device RX offload capabilities: 0x%lx", dev_info.rx_offload_capa);
+	log_info("Requested RX offloads: 0x%lx", port_conf.rxmode.offloads);
+	if (dev_info.rx_offload_capa & RTE_ETH_RX_OFFLOAD_RSS_HASH)
+		log_info("Device supports RSS_HASH offload");
+	else
+		log_warn("Device does NOT support RSS_HASH offload!");
+
+	// /* Try to enable isolated mode - disable DPDK's automatic flow rules
+	//  * so that the runtime's DR domain can receive traffic instead */
+	// struct rte_flow_error flow_error;
+	// log_info("=== DPDK: Attempting isolated mode ===");
+	// retval = rte_flow_isolate(port, 1, &flow_error);
+	// if (retval == 0) {
+	// 	log_info("  rte_flow_isolate: SUCCESS - DPDK automatic rules DISABLED");
+	// 	log_info("  Runtime's DR domain should now be able to receive traffic");
+	// } else {
+	// 	log_warn("  rte_flow_isolate: FAILED (ret=%d: %s)", retval,
+	// 	         flow_error.message ? flow_error.message : "unknown error");
+	// 	log_warn("  DPDK will create automatic catchall rules - may conflict with runtime DR domain");
+	// }
+
 	/* Configure the Ethernet device. */
+	log_info("=== DPDK: Configuring NIC default RX path ===");
+	log_info("  rte_eth_dev_configure(port=%u, rx_rings=%u, tx_rings=%u)", port, rx_rings, tx_rings);
+	log_info("  mq_mode=%d (0=NONE, 1=RSS)", port_conf.rxmode.mq_mode);
 	retval = rte_eth_dev_configure(port, rx_rings, tx_rings, &port_conf);
-	if (retval != 0)
+	if (retval != 0) {
+		log_err("rte_eth_dev_configure failed with error %d", retval);
 		return retval;
+	}
+	log_info("  rte_eth_dev_configure: SUCCESS");
 
 	retval = rte_eth_dev_adjust_nb_rx_tx_desc(port, &nb_rxd, &nb_txd);
 	if (retval != 0)
@@ -153,6 +183,8 @@ static inline int dpdk_port_init(uint8_t port, struct rte_mempool *mbuf_pool)
 				rte_eth_dev_socket_id(port), rxconf, mbuf_pool);
 		if (retval < 0)
 			return retval;
+		fprintf(stderr, "[DPDK] RX queue %u configured on port %u\n", q, port);
+		fflush(stderr);
 	}
 
 	/* Enable TX offloading */
@@ -169,9 +201,12 @@ static inline int dpdk_port_init(uint8_t port, struct rte_mempool *mbuf_pool)
 	}
 
 	/* Start the Ethernet port. */
+	log_info("  rte_eth_dev_start(port=%u) - THIS ACTIVATES DPDK's DEFAULT RX PATH", port);
 	retval = rte_eth_dev_start(port);
 	if (retval < 0)
 		return retval;
+	log_info("  rte_eth_dev_start: SUCCESS - DPDK now owns NIC RX queue 0");
+	log_info("=== DPDK NIC configuration complete ===");
 
 	/* Display the port MAC address. */
 	struct rte_ether_addr addr;
@@ -236,6 +271,82 @@ void dpdk_print_eth_stats(void)
 			stats.obytes);
 	fprintf(stderr,"RX-error: %"PRIu64" TX-error: %"PRIu64" RX-mbuf-fail: %"PRIu64"\n",
 			stats.ierrors, stats.oerrors, stats.rx_nombuf);
+
+	/* Print per-queue stats */
+	// fprintf(stderr, "Per-queue RX stats:\n");
+	// for (int i = 0; i < RTE_ETHDEV_QUEUE_STAT_CNTRS && i < 16; i++) {
+	// 	// if (stats.q_ipackets[i] > 0 || stats.q_errors[i] > 0) {
+    //     fprintf(stderr, "  Q%d: pkts=%"PRIu64" bytes=%"PRIu64" errors=%"PRIu64"\n",
+    //         i, stats.q_ipackets[i], stats.q_ibytes[i], stats.q_errors[i]);
+	// 	// }
+	// }
+}
+
+/*
+ * Print detailed extended stats (xstats) including per-queue drops
+ */
+void dpdk_print_xstats(void)
+{
+	int num_xstats, i;
+
+	/* Get number of xstats */
+	num_xstats = rte_eth_xstats_get_names(dp.port, NULL, 0);
+	log_info("num_xstats = %d\n", num_xstats);
+	if (num_xstats < 0) {
+		log_warn("dpdk: error getting xstats count");
+		return;
+	}
+
+	/* Stack-allocate arrays */
+	struct rte_eth_xstat_name xstat_names[num_xstats];
+	struct rte_eth_xstat xstats[num_xstats];
+
+	/* Get xstat names and values */
+	if (rte_eth_xstats_get_names(dp.port, xstat_names, num_xstats) != num_xstats ||
+	    rte_eth_xstats_get(dp.port, xstats, num_xstats) != num_xstats) {
+		log_warn("dpdk: error getting xstats");
+		return;
+	}
+
+	fprintf(stderr, "\n=== DPDK Extended Stats (port %d) ===\n", dp.port);
+
+	/* Print queue-specific drops and errors */
+	fprintf(stderr, "\nPer-Queue RX Stats:\n");
+	for (i = 0; i < num_xstats; i++) {
+		const char *name = xstat_names[i].name;
+        printf("i: %d. name: %s\n", i, name);
+		uint64_t val = xstats[i].value;
+
+		/* Filter for interesting queue stats */
+		if (val >= 0 && (strstr(name, "rx_q") || strstr(name, "tx_q"))) {
+			if (strstr(name, "packets") || strstr(name, "bytes") ||
+			    strstr(name, "errors") || strstr(name, "dropped") ||
+			    strstr(name, "missed")) {
+				fprintf(stderr, "  %s: %"PRIu64"\n", name, val);
+			}
+		}
+	}
+
+	/* Print overall drop/error stats */
+	fprintf(stderr, "\nDrop/Error Stats:\n");
+	for (i = 0; i < num_xstats; i++) {
+		const char *name = xstat_names[i].name;
+		uint64_t val = xstats[i].value;
+
+		if (val > 0 && (strstr(name, "drop") || strstr(name, "miss") ||
+		                strstr(name, "error") || strstr(name, "discard"))) {
+			fprintf(stderr, "  %s: %"PRIu64"\n", name, val);
+		}
+	}
+}
+
+/*
+ * Print directpath active queue stats for all processes
+ * NOTE: Stats are printed directly in directpath_poll_proc() in queues.c
+ */
+void dpdk_print_directpath_stats(void)
+{
+	/* Stats printed in directpath module during polling */
 }
 
 /*

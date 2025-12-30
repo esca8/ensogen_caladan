@@ -68,7 +68,7 @@ struct udp_spawn_data {
 typedef void (*udpspawn_fn_t)(struct udp_spawn_data *d);
 
 extern int udp_create_spawner(struct netaddr laddr, udpspawn_fn_t fn,
-			      udpspawner_t **s_out);
+			      unsigned int affinity, udpspawner_t **s_out);
 extern void udp_destroy_spawner(udpspawner_t *s);
 extern ssize_t udp_send(const void *buf, size_t len,
 			struct netaddr laddr, struct netaddr raddr);

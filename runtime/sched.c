@@ -3,6 +3,7 @@
  */
 
 #include <sched.h>
+#include <stdio.h>
 
 #include <base/stddef.h>
 #include <base/lock.h>
@@ -429,11 +430,15 @@ again:
 	/* did not find anything to run, park this kthread */
 	STAT(SCHED_CYCLES) += perthread_get_stable(last_tsc) - start_tsc;
 	/* we may have got a preempt signal before voluntarily yielding */
+	// fprintf(stderr, "[SCHEDULER] Kthread %u about to call kthread_park()\n", l->kthread_idx);
+	fflush(stderr);
 	kthread_park();
 	start_tsc = rdtsc();
 	iters = 0;
 
 	l->parked = false;
+	// fprintf(stderr, "[SCHEDULER] Kthread %u resumed from park, back in schedule loop\n", l->kthread_idx);
+	fflush(stderr);
 	goto again;
 
 done:
@@ -942,6 +947,9 @@ static __noreturn void schedule_start(void)
 
 	spin_lock(&k->lock);
 	k->parked = false;
+	fprintf(stderr, "[SCHEDULER] Kthread %u entering schedule() for first time (runningks=%d, spinks=%d)\n",
+	        k->kthread_idx, runtime_active_cores(), spinks);
+	fflush(stderr);
 	schedule();
 }
 

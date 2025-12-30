@@ -165,6 +165,7 @@ impl UdpSpawner {
     pub unsafe fn new(
         local_addr: SocketAddrV4,
         f: extern "C" fn(*mut ffi::udp_spawn_data),
+        affinity: u32,
     ) -> io::Result<Self> {
         println!("{:?}", local_addr);
         let laddr = ffi::netaddr {
@@ -173,7 +174,7 @@ impl UdpSpawner {
         };
 
         let mut spawner: *mut ffi::udpspawner_t = ptr::null_mut();
-        let ret = ffi::udp_create_spawner(laddr, Some(f), &mut spawner as *mut *mut _);
+        let ret = ffi::udp_create_spawner(laddr, Some(f), affinity, &mut spawner as *mut *mut _);
 
         if ret < 0 {
             Err(io::Error::from_raw_os_error(-ret as i32))

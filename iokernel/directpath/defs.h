@@ -85,6 +85,12 @@ struct cq {
 	uint8_t qp_idx;
 	uint8_t state;
 	struct mlx5dv_devx_obj *obj;
+
+	/* packet statistics */
+	uint64_t rx_packets;
+	uint64_t rx_bytes;
+	uint64_t tx_packets;
+	uint64_t tx_bytes;
 };
 
 struct wq {

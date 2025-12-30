@@ -57,6 +57,8 @@ struct runtime_info {
 	struct congestion_info congestion;
 	uint64_t directpath_strides_posted;
 	atomic64_t directpath_strides_consumed;
+	uint32_t steering_anchor_id;  /* steering anchor ID for non-VFIO directpath */
+	uint32_t pad;  /* padding for alignment */
 };
 
 enum {

@@ -135,6 +135,8 @@ static int parse_runtime_spinning_kthreads(const char *name, const char *val)
 	}
 
 	spinks = tmp;
+	fprintf(stderr, "[CONFIG] runtime_spinning_kthreads set to %d\n", spinks);
+	fflush(stderr);
 	return 0;
 }
 

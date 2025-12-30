@@ -232,8 +232,24 @@ fn run_tcp_server(backend: Backend, addr: SocketAddrV4, worker: Arc<FakeWorker>)
 }
 
 fn run_spawner_server(addr: SocketAddrV4, workerspec: &str) {
-    println!("running spawner server | addr={}:{}", addr.ip(), addr.port());
+    println!("running spawner server | addr={}", addr);
     static mut SPAWNER_WORKER: Option<FakeWorker> = None;
+    static PKTS_RECEIVED: AtomicU64 = AtomicU64::new(0);
+    static PKTS_ECHOED: AtomicU64 = AtomicU64::new(0);
+    static BURST_COUNTER: AtomicU64 = AtomicU64::new(0);
+
+    // Per-thread packet counters (15 threads)
+    static PER_THREAD_RX: [AtomicU64; 15] = [
+        AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0),
+        AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0),
+        AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0),
+    ];
+    static PER_THREAD_TX: [AtomicU64; 15] = [
+        AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0),
+        AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0),
+        AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0),
+    ];
+
     unsafe {
         SPAWNER_WORKER = Some(FakeWorker::create(workerspec).unwrap());
     }
@@ -241,27 +257,69 @@ fn run_spawner_server(addr: SocketAddrV4, workerspec: &str) {
         unsafe {
             // println!("echoing data of len {}", (*d).len);
             let buf = slice::from_raw_parts((*d).buf as *mut u8, ((*d).len+4) as usize);
-            // println!("Buffer len: {}", buf.len());
-            // println!("Hex: {:02x?}", &buf);
-            // println!("Full pkt: {:02x?}", (*d)); 
             let mut payload = Payload::deserialize(&mut &buf[..]).unwrap();
             let worker = SPAWNER_WORKER.as_ref().unwrap();
-            // println!("work_iterations={:?}\n", payload.work_iterations); 
+
+            let total_rx = PKTS_RECEIVED.fetch_add(1, Ordering::Relaxed) + 1;
+            let burst = BURST_COUNTER.fetch_add(1, Ordering::Relaxed);
+
+            // Determine which thread by destination port (ports 80-94 map to threads 0-14)
+            let local_port = (*d).laddr.port;
+            let thread_idx = if local_port >= 80 && local_port <= 94 {
+                (local_port - 80) as usize
+            } else {
+                0  // fallback
+            };
+
+            if thread_idx < 15 {
+                let thread_rx = PER_THREAD_RX[thread_idx].fetch_add(1, Ordering::Relaxed) + 1;
+
+                // Print per-thread stats every 1,000,000 packets on this thread
+                if thread_rx % 1000000 == 0 {
+                    let thread_tx = PER_THREAD_TX[thread_idx].load(Ordering::Relaxed);
+                    let drops = thread_rx.saturating_sub(thread_tx);
+                    println!("[Thread {}] port={} RX={} TX={} DROPS={} (drop_rate={:.2}%)",
+                             thread_idx, local_port, thread_rx, thread_tx, drops,
+                             (drops as f64 / thread_rx as f64) * 100.0);
+                }
+            }
+
             worker.work(payload.work_iterations, payload.randomness);
-            // worker.work(0, 0); 
-            // payload.randomness = shenango::rdtsc();
-            // println!("done working!\n"); 
+
             let mut array = ArrayVec::<_, PAYLOAD_SIZE>::new();
             payload.serialize_into(&mut array).unwrap();
-            // format!("start reply... | d.laddr={}, d.raddr={}\n", (*d).laddr.ip, (*d).raddr.ip); 
             let _ = UdpSpawner::reply(d, array.as_slice());
-            // println!("end reply...\n"); 
+            let total_tx = PKTS_ECHOED.fetch_add(1, Ordering::Relaxed) + 1;
+
+            if thread_idx < 15 {
+                PER_THREAD_TX[thread_idx].fetch_add(1, Ordering::Relaxed);
+            }
+
+            // Print overall stats every 1,000,000 packets
+            if total_rx % 1000000 == 0 {
+                let drops = total_rx.saturating_sub(total_tx);
+                println!("\n=== OVERALL STATS: RX={} TX={} DROPS={} (drop_rate={:.2}%) ===",
+                         total_rx, total_tx, drops, (drops as f64 / total_rx as f64) * 100.0);
+            }
+
             UdpSpawner::release_data(d);
-            // println!("release data...\n"); 
         }
     }
 
-    let _s = unsafe { UdpSpawner::new(addr, echo).unwrap() };
+    // Create 15 spawners on ports 80-94, each with affinity to its corresponding kthread
+    let mut spawners = Vec::new();
+    let base_port = addr.port();
+    let ip = addr.ip();
+
+    for i in 0..15 {
+        let port = base_port + i;
+        let spawner_addr = SocketAddrV4::new(*ip, port);
+        println!("Creating spawner {} on port {} with affinity {}", i, port, i);
+        let s = unsafe { UdpSpawner::new(spawner_addr, echo, i as u32).unwrap() };
+        spawners.push(s);
+    }
+
+    println!("All 15 spawners created on ports {}-{}", base_port, base_port + 14);
 
     let wg = shenango::WaitGroup::new();
     wg.add(1);

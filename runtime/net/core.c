@@ -237,7 +237,7 @@ void net_error(struct mbuf *m, int err)
 
 static void net_rx_one(struct mbuf *m)
 {
-    PRINT_DBG("core.c: start net_rx_one | len1=%d\n", mbuf_length(m)); 
+    PRINT_DBG("core.c: start net_rx_one | len1=%d\n", mbuf_length(m));
 	const struct eth_hdr *llhdr;
 	const struct ip_hdr *iphdr;
 	uint16_t len;
@@ -248,6 +248,12 @@ static void net_rx_one(struct mbuf *m)
 	/*
 	 * Link Layer Processing (OSI L2)
 	 */
+
+	/* Read cycles from packet byte 0 BEFORE stripping Ethernet header */
+	/* This preserves ensogen's work_iterations written to destination MAC */
+	uint64_t cycles = ntoh64(*(uint64_t*)mbuf_data(m));
+	m->timestamp = cycles;  /* Store in mbuf for later retrieval */
+    // printf("from net_rx_one: cycles=%d\n", cycles); 
 
 	llhdr = mbuf_pull_hdr_or_null(m, *llhdr);
     PRINT_DBG("core.c: start net_rx_one | len2=%d\n", mbuf_length(m)); 
@@ -341,8 +347,14 @@ drop:
  */
 void net_rx_batch(struct mbuf **ms, unsigned int nr)
 {
-    log_info("core.c: net_rx_batch"); 
 	int i;
+	static uint64_t total_pkts = 0;
+
+	total_pkts += nr;
+	// if (total_pkts % 10000 < nr) {
+	// 	fprintf(stderr, "[NET_RX_BATCH] Received batch of %u packets (total %lu)\n", nr, total_pkts);
+	// 	fflush(stderr);
+	// }
 
 	for (i = 0; i < nr; i++) {
 		if (i + RX_PREFETCH_STRIDE < nr)
@@ -661,12 +673,21 @@ static void net_tx_raw(struct mbuf *m)
  */
 void net_tx_eth(struct mbuf *m, uint16_t type, const struct eth_addr *dhost, bool is_local)
 {
-    PRINT_DBG("!! net_tx_eth"); 
+    PRINT_DBG("!! net_tx_eth");
 	struct eth_hdr *eth_hdr;
+	uint64_t cycles = m->timestamp;  /* Retrieve cycles stored by net_push_iphdr */
+
 	eth_hdr = mbuf_push_hdr(m, *eth_hdr);
 	eth_hdr->shost = netcfg.mac;
 	eth_hdr->dhost = *dhost;
 	eth_hdr->type = hton16(type);
+
+	/* Overwrite destination MAC (bytes 0-7) with cycles for Enso compatibility */
+	if (cycles != 0) {
+		uint8_t *eth_bytes = (uint8_t *)eth_hdr;
+		*(uint64_t*)(eth_bytes) = hton64(cycles);
+	}
+
 	m->txflags |= is_local ? TXFLAG_LOCAL : 0;
 	net_tx_raw(m);
 }
@@ -674,6 +695,28 @@ void net_tx_eth(struct mbuf *m, uint16_t type, const struct eth_addr *dhost, boo
 static void net_push_iphdr(struct mbuf *m, uint8_t proto, uint32_t daddr)
 {
 	struct ip_hdr *iphdr;
+	uint32_t timestamp = 0;
+	uint64_t cycles = 0;
+
+	/* At this point, mbuf_data(m) points to UDP header (8 bytes) */
+	/* UDP payload starts at offset 8 */
+
+	/* Read cycles from payload offset 0 */
+	if (mbuf_length(m) >= 16) {
+		const uint8_t *udp_payload = (const uint8_t*)mbuf_data(m) + 8;
+		const uint64_t *payload_cycles = (const uint64_t*)(udp_payload);
+		cycles = ntoh64(*payload_cycles);
+	}
+
+	/* Read timestamp from payload offset 8 */
+	if (mbuf_length(m) >= 24) {
+		const uint8_t *udp_payload = (const uint8_t*)mbuf_data(m) + 8;
+		const uint64_t *payload_ts = (const uint64_t*)(udp_payload + 8);
+		timestamp = (uint32_t)ntoh64(*payload_ts);
+	}
+
+	/* Store cycles in mbuf for net_tx_eth to use */
+	m->timestamp = cycles;
 
 	/* populate IP header */
 	iphdr = mbuf_push_hdr(m, *iphdr);
@@ -688,6 +731,12 @@ static void net_push_iphdr(struct mbuf *m, uint8_t proto, uint32_t daddr)
 	iphdr->chksum = 0;
 	iphdr->saddr = hton32(netcfg.addr);
 	iphdr->daddr = hton32(daddr);
+
+	/* Write timestamp back to IP header offset 4 (id + off fields) */
+	if (timestamp != 0) {
+		uint8_t *ip_bytes = (uint8_t *)iphdr;
+		*(uint32_t*)(ip_bytes + 4) = hton32(timestamp);
+	}
 
 	if (netcfg.no_tx_offloads)
 		iphdr->chksum = ipv4_cksum(iphdr);

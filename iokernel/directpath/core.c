@@ -1,5 +1,5 @@
 #ifdef DIRECTPATH
-
+// #if 1
 #include <base/log.h>
 #include <base/time.h>
 #include <base/thread.h>
@@ -625,6 +625,8 @@ static int create_cq(struct directpath_ctx *dp, struct cq *cq, uint32_t log_nr_c
 	cq->buf = dp->region.base + bufs;
 	cq->dbrec = dp->region.base + dbr;
 	cq->cqe_cnt = cqe_cnt;
+	cq->rx_packets = 0;
+	cq->rx_bytes = 0;
 
 	for (i = 0; i < cqe_cnt; i++)
 		mlx5dv_set_cqe_owner(&cq->buf[i], 1);

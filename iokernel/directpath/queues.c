@@ -2,6 +2,7 @@
 
 #include <signal.h>
 
+#include <base/byteorder.h>
 #include <util/mmio.h>
 #include <util/udma_barrier.h>
 
@@ -87,19 +88,46 @@ static void directpath_queue_update_state(struct directpath_ctx *ctx,
 	}
 }
 
+/* NOTE: TX stats tracking
+ * TX happens in the runtime (mlx5_transmit_one), not iokernel.
+ * To populate TX counters, add tracking in:
+ *   runtime/net/directpath/mlx5/mlx5_rxtx.c:mlx5_transmit_one()
+ * and expose counters via shared memory or update them directly
+ * in the iokernel's directpath_ctx->qps[i].tx_cq fields.
+ */
+
 static uint64_t directpath_poll_cq_delay(struct directpath_ctx *ctx,
                                          struct thread *th, struct cq *cq,
                                          bool do_arm)
 {
 	uint32_t cons_idx;
 	struct mlx5_cqe64 *cqe;
+	static uint64_t pkt_count = 0;
+	static uint64_t null_count = 0;
 
 	cons_idx = ACCESS_ONCE(th->q_ptrs->directpath_rx_tail);
 	cqe = get_cqe(cq, cons_idx);
 	if (!cqe) {
+		if (++null_count % 100000000 == 0) {
+			fprintf(stderr, "[IOK CQ_POLL] No CQE found (%lu times), cons_idx=%u\n",
+			        null_count, cons_idx);
+			fflush(stderr);
+		}
 		if (do_arm) directpath_arm_queue(ctx, cq, cons_idx);
 		return 0;
 	}
+
+	/* Track packet statistics */
+	cq->rx_packets++;
+	cq->rx_bytes += be32toh(cqe->byte_cnt);
+
+	/* Print RSS hash (iokernel perspective) */
+    uint32_t rss_hash = ntoh32(*((uint32_t *)cqe + 3));
+	// if (rss_hash != 0 || ++pkt_count % 10000 == 0) {
+	// 	fprintf(stderr, "[IOKERNEL CQE FOUND] CQ %u: RSS hash = 0x%08x (pkt %lu)\n",
+	// 	        cq->qp_idx, rss_hash, pkt_count);
+	// 	fflush(stderr);
+	// }
 
 	return hw_timestamp_delay_us(cqe);
 }
@@ -146,6 +174,14 @@ bool directpath_poll_proc(struct proc *p, uint64_t *delay_cycles,
 	struct thread *th;
 	uint64_t delay = 0;
 	int i;
+	static uint64_t last_stats_time = 0;
+	static uint64_t poll_count = 0;
+
+	if (++poll_count % 10000000 == 0) {
+		fprintf(stderr, "[IOK POLL_PROC] Called %lu times, nr_qs=%u, nr_armed=%u\n",
+		        poll_count, ctx->nr_qs, ctx->nr_armed);
+		fflush(stderr);
+	}
 
 	if (ctx->nr_armed == ctx->nr_qs &&
 	    (!cfg.directpath_active_rss || ctx->active_rx_count == 1))
@@ -164,6 +200,52 @@ bool directpath_poll_proc(struct proc *p, uint64_t *delay_cycles,
 		directpath_queue_update_state(ctx, th, i, cur_tsc);
 	}
 
+	/* Print stats every 2 seconds */
+	if (cur_tsc - last_stats_time > cycles_per_us * 2000000) {
+		uint64_t total_rx_packets = 0, total_rx_bytes = 0;
+		uint64_t total_tx_packets = 0, total_tx_bytes = 0;
+
+		fprintf(stderr, "\n=== Directpath Queue Stats (PID %d) at %lu us ===\n",
+		        p->pid, cur_tsc / cycles_per_us);
+		fprintf(stderr, "  Threads: %u  Queues: %u/%u active  Armed: %u\n",
+		        p->thread_count, ctx->active_rx_count, ctx->nr_qs, ctx->nr_armed);
+		fprintf(stderr, "  RSS gen: sw=%lu hw=%lu\n", ctx->sw_rss_gen, ctx->hw_rss_gen);
+
+		fprintf(stderr, "\n  Per-Queue Status:\n");
+		fprintf(stderr, "  Queue | Active | Armed | State      | RX Packets | RX Bytes   | TX Packets | TX Bytes   | CQN\n");
+		fprintf(stderr, "  ------|--------|-------|------------|------------|------------|------------|------------|--------\n");
+		for (i = 0; i < ctx->nr_qs; i++) {
+			cq = &ctx->qps[i].rx_cq;
+			struct cq *tx_cq = &ctx->qps[i].tx_cq;
+			const char *state_str;
+			switch (cq->state) {
+				case RXQ_STATE_ACTIVE: state_str = "ACTIVE    "; break;
+				case RXQ_STATE_DISABLING: state_str = "DISABLING "; break;
+				case RXQ_STATE_DISABLED: state_str = "DISABLED  "; break;
+				default: state_str = "UNKNOWN   ";
+			}
+			fprintf(stderr, "  %5d | %6s | %5s | %s | %10lu | %10lu | %10lu | %10lu | %u\n",
+			        i,
+			        bitmap_test(ctx->active_rx_queues, i) ? "YES" : "NO ",
+			        bitmap_test(ctx->armed_rx_queues, i) ? "YES" : "NO ",
+			        state_str,
+			        cq->rx_packets,
+			        cq->rx_bytes,
+			        tx_cq->tx_packets,
+			        tx_cq->tx_bytes,
+			        cq->cqn);
+
+			total_rx_packets += cq->rx_packets;
+			total_rx_bytes += cq->rx_bytes;
+			total_tx_packets += tx_cq->tx_packets;
+			total_tx_bytes += tx_cq->tx_bytes;
+		}
+		fprintf(stderr, "  ------|--------|-------|------------|------------|------------|------------|------------|--------\n");
+		fprintf(stderr, "  TOTAL |        |       |            | %10lu | %10lu | %10lu | %10lu |\n",
+		        total_rx_packets, total_rx_bytes, total_tx_packets, total_tx_bytes);
+		fprintf(stderr, "\n");
+		last_stats_time = cur_tsc;
+	}
 
 	delay *= cycles_per_us;
 	*delay_cycles = MAX(*delay_cycles, delay);

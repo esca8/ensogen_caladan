@@ -44,6 +44,10 @@ struct mlx5_rxq {
 	/* work queue */
 	struct mlx5_wq wq;
 	uint32_t *shadow_tail;
+
+	/* packet statistics */
+	uint64_t rx_packets;
+	uint64_t rx_bytes;
 } __aligned(CACHE_LINE_SIZE);
 
 BUILD_ASSERT(offsetof(struct mlx5_rxq, wq) <= CACHE_LINE_SIZE);
@@ -60,6 +64,10 @@ struct mlx5_txq {
 
 	struct ibv_cq_ex *tx_cq;
 	struct ibv_qp *tx_qp;
+
+	/* packet statistics */
+	uint64_t tx_packets;
+	uint64_t tx_bytes;
 } __aligned(CACHE_LINE_SIZE);
 
 extern struct mlx5_txq txqs[NCPU];
@@ -92,6 +100,8 @@ extern int mlx5_verbs_init_context(bool uses_qsteering);
 extern int mlx5_verbs_init(bool uses_qsteering);
 extern int mlx5_init_flow_steering(void);
 extern bool mlx5_sw_flow_steering_early_init(void);
+extern void mlx5_print_flow_counters(void);
+extern int mlx5_start_flow_counter_monitor(void);
 extern int mlx5_init_queue_steering(void);
 extern int mlx5_rx_stride_init(void);
 extern int mlx5_rx_stride_init_thread(void);

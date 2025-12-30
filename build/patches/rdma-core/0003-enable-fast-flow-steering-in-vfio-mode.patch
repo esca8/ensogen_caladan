@@ -977,7 +977,7 @@ index 00000000..7fcd8d13
 +{
 +	struct mlx5_vfio_context *ctx = to_mvfio_ctx(ibctx);
 +
-+	assert(port == 1);
++	assert(port == 0);
 +
 +	attr->link_layer = mlx5_port_type_to_verbs(
 +		MLX5_VFIO_CAP_GEN(ctx, port_type));
