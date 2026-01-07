@@ -220,16 +220,18 @@ static struct mlx5dv_devx_obj *setup_legacy_flow_group(uint32_t table_number)
 }
 
 static int setup_hardware_sw_rule(uint32_t root_tbl_id, uint32_t group_id,
-	                              uint32_t sw_table_id)
+	                              uint32_t sw_table_id, uint32_t counter_id)
 {
 	uint32_t in[DEVX_ST_SZ_DW(set_fte_in) + DEVX_ST_SZ_DW(dest_format)] = {};
 	uint32_t out[DEVX_ST_SZ_DW(set_fte_out)];
 	void *in_flow_context;
 	uint8_t *in_dests;
 
+	(void)counter_id; /* unused for now */
+
 	FS_DBG("=== setup_hardware_sw_rule (ROOT HW TABLE RULE) ===");
-	FS_DBG("  root_tbl_id=%u, group_id=%u, dest_sw_table_id=%u",
-	       root_tbl_id, group_id, sw_table_id);
+	FS_DBG("  root_tbl_id=%u, group_id=%u, dest_sw_table_id=%u, counter_id=%u",
+	       root_tbl_id, group_id, sw_table_id, counter_id);
 	FS_DBG("  -> HW RULE MATCH CRITERIA:");
 	FS_DBG("       ethertype = 0x%04x (IPv4)", ETHTYPE_IP);
 	FS_DBG("  -> ACTION: FWD to SW table (id=%u)", sw_table_id);
@@ -414,6 +416,13 @@ int directpath_setup_steering(void)
 	if (ret)
 		return ret;
 
+	/* Allocate flow counter (not attached to FTE yet) */
+	ret = alloc_flow_counter(&root_counter, "root_hw_rule");
+	if (ret) {
+		log_warn("Failed to allocate flow counter, continuing without it");
+		root_counter.id = 0;
+	}
+
 	/* setup direct flow steering */
 	FS_DBG("Creating DR domain for NIC_RX...");
 	errno = 0;
@@ -462,7 +471,8 @@ int directpath_setup_steering(void)
 		FS_DBG("DR matcher created: SUCCESS (matcher=%p)", matcher);
 
 		ret = setup_hardware_sw_rule(root_tbl_number, root_fg_id,
-			                         mlx5dv_dr_table_get_id(main_sw_tbl));
+			                         mlx5dv_dr_table_get_id(main_sw_tbl),
+			                         root_counter.id);
 		if (ret)
 			return ret;
 
@@ -477,7 +487,8 @@ int directpath_setup_steering(void)
 			return -1;
 
 		ret = setup_hardware_sw_rule(root_tbl_number, root_fg_id,
-			                         mlx5_devx_get_obj_id(legacy_hw_tbl));
+			                         mlx5_devx_get_obj_id(legacy_hw_tbl),
+			                         root_counter.id);
 		if (ret)
 			return ret;
 
