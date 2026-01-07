@@ -24,6 +24,8 @@ extern struct ibv_context *vfcontext;
 extern int page_cmd_efd;
 
 extern int events_init(void);
+extern void dp_diag_cq_poll(bool found);
+extern void dp_diag_cq_arm(void);
 
 struct mlx5_eqe;
 struct directpath_ctx;

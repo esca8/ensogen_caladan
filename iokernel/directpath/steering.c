@@ -44,6 +44,88 @@ static struct mlx5dv_devx_obj *legacy_hw_tbl;
 static struct mlx5dv_devx_obj *legacy_flow_group;
 static DEFINE_BITMAP(ft_used_entries, FLOW_TBL_NR_ENTRIES);
 
+/* Flow counter for debugging */
+struct flow_counter {
+	struct mlx5dv_devx_obj	*devx_obj;
+	uint32_t		id;
+	const char		*name;
+};
+
+static struct flow_counter root_counter;
+static uint64_t last_counter_query_tsc;
+
+static int alloc_flow_counter(struct flow_counter *cnt, const char *name)
+{
+	uint32_t in[16] __attribute__((aligned(8))) = {0};
+	uint32_t out[16] __attribute__((aligned(8))) = {0};
+
+	in[0] = htobe32(MLX5_CMD_OP_CREATE_FLOW_COUNTER << 16);
+
+	cnt->devx_obj = mlx5dv_devx_obj_create(vfcontext, in, sizeof(in), out, sizeof(out));
+	if (!cnt->devx_obj) {
+		log_err("alloc_flow_counter(%s): failed, errno=%d", name, errno);
+		return -errno;
+	}
+
+	cnt->id = be32toh(out[2]);
+	cnt->name = name;
+
+	FS_DBG("alloc_flow_counter(%s): id=%u", name, cnt->id);
+	return 0;
+}
+
+static int query_flow_counter(struct flow_counter *cnt, uint64_t *packets, uint64_t *bytes)
+{
+	uint32_t in[16] __attribute__((aligned(8))) = {0};
+	uint32_t out[16] __attribute__((aligned(8))) = {0};
+	int ret;
+
+	if (!cnt->devx_obj)
+		return -EINVAL;
+
+	in[0] = htobe32(MLX5_CMD_OP_QUERY_FLOW_COUNTER << 16);
+	in[7] = htobe32(cnt->id);
+
+	ret = mlx5dv_devx_obj_query(cnt->devx_obj, in, sizeof(in), out, sizeof(out));
+	if (ret) {
+		log_warn("query_flow_counter(%s): failed ret=%d errno=%d", cnt->name, ret, errno);
+		return -errno;
+	}
+
+	uint8_t status = (be32toh(out[0]) >> 24) & 0xFF;
+	if (status) {
+		log_warn("query_flow_counter(%s): status=0x%x", cnt->name, status);
+		return -EIO;
+	}
+
+	*packets = ((uint64_t)be32toh(out[4]) << 32) | be32toh(out[5]);
+	*bytes = ((uint64_t)be32toh(out[6]) << 32) | be32toh(out[7]);
+
+	return 0;
+}
+
+void directpath_print_flow_counters(void)
+{
+	uint64_t packets, bytes;
+	uint64_t now = rdtsc();
+	int ret;
+
+	if (!root_counter.devx_obj)
+		return;
+
+	/* Query at most once per 2 seconds */
+	if (now - last_counter_query_tsc < 2000000ULL * cycles_per_us)
+		return;
+	last_counter_query_tsc = now;
+
+	ret = query_flow_counter(&root_counter, &packets, &bytes);
+	if (ret == 0) {
+		fprintf(stderr, "[FLOW_COUNTER] root_hw_rule: packets=%lu, bytes=%lu\n",
+		        packets, bytes);
+		fflush(stderr);
+	}
+}
+
 static struct mlx5dv_devx_obj *create_hardware_table(uint32_t level,
 	uint32_t log_size)
 {
@@ -300,6 +382,13 @@ int directpath_steering_attach(struct directpath_ctx *ctx)
 		         (ctx->p->ip_addr >> 8) & 0xFF, ctx->p->ip_addr & 0xFF,
 		         ctx->fwd_rule);
 		FS_DBG("  DR rule created SUCCESS, fwd_rule=%p", ctx->fwd_rule);
+
+		// int sync_ret;
+		// /* Sync DR domain to ensure rulore is active in hardware */
+		// sync_ret = mlx5dv_dr_domain_sync(dr_dmn, MLX5DV_DR_DOMAIN_SYNC_FLAGS_SW);
+		// FS_DBG("  DR domain sync (SW): ret=%d, errno=%d", sync_ret, errno);
+		// sync_ret = mlx5dv_dr_domain_sync(dr_dmn, MLX5DV_DR_DOMAIN_SYNC_FLAGS_HW);
+		// FS_DBG("  DR domain sync (HW): ret=%d, errno=%d", sync_ret, errno);
 	}
 
 	return 0;
@@ -376,6 +465,12 @@ int directpath_setup_steering(void)
 			                         mlx5dv_dr_table_get_id(main_sw_tbl));
 		if (ret)
 			return ret;
+
+		/* Sync DR domain after initial setup */
+		ret = mlx5dv_dr_domain_sync(dr_dmn, MLX5DV_DR_DOMAIN_SYNC_FLAGS_SW);
+		FS_DBG("Initial DR domain sync (SW): ret=%d, errno=%d", ret, errno);
+		ret = mlx5dv_dr_domain_sync(dr_dmn, MLX5DV_DR_DOMAIN_SYNC_FLAGS_HW);
+		FS_DBG("Initial DR domain sync (HW): ret=%d, errno=%d", ret, errno);
 	} else {
 		legacy_hw_tbl = create_hardware_table(1, FLOW_TBL_LOG_ENTRIES );
 		if (!legacy_hw_tbl)

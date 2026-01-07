@@ -15,6 +15,59 @@ struct eq main_eq;
 
 int page_cmd_efd;
 
+/* Diagnostic counters for packet flow tracing */
+struct dp_diag_counters {
+	uint64_t eq_polls;              /* Times directpath_events_poll called */
+	uint64_t eq_events_total;       /* Total EQEs processed */
+	uint64_t eq_comp_events;        /* Completion EQEs */
+	uint64_t eq_cmd_events;         /* Command EQEs */
+	uint64_t eq_error_events;       /* Error EQEs */
+	uint64_t eq_other_events;       /* Other EQEs */
+	uint64_t cq_polls;              /* Times CQ polled */
+	uint64_t cq_polls_found;        /* CQ polls that found CQE */
+	uint64_t cq_polls_empty;        /* CQ polls that found nothing */
+	uint64_t cq_arms;               /* Times CQ armed */
+	uint64_t last_print_tsc;        /* Last time stats printed */
+};
+
+static struct dp_diag_counters diag = {0};
+
+void dp_diag_print(void)
+{
+	uint64_t now = rdtsc();
+	if (now - diag.last_print_tsc < 2000000ULL * cycles_per_us)
+		return;
+	diag.last_print_tsc = now;
+
+	fprintf(stderr, "\n=== IOKERNEL PACKET FLOW DIAGNOSTICS ===\n");
+	fprintf(stderr, "  EQ: polls=%lu events=%lu (comp=%lu cmd=%lu err=%lu other=%lu)\n",
+	        diag.eq_polls, diag.eq_events_total,
+	        diag.eq_comp_events, diag.eq_cmd_events,
+	        diag.eq_error_events, diag.eq_other_events);
+	fprintf(stderr, "  CQ: polls=%lu found=%lu empty=%lu arms=%lu\n",
+	        diag.cq_polls, diag.cq_polls_found, diag.cq_polls_empty, diag.cq_arms);
+	fprintf(stderr, "  Ratios: %.1f%% CQ polls find CQE, %.1f events/poll\n",
+	        diag.cq_polls > 0 ? (100.0 * diag.cq_polls_found / diag.cq_polls) : 0,
+	        diag.eq_polls > 0 ? ((double)diag.eq_events_total / diag.eq_polls) : 0);
+	fprintf(stderr, "==========================================\n\n");
+	fflush(stderr);
+}
+
+/* Counter increment functions for use by queues.c */
+void dp_diag_cq_poll(bool found)
+{
+	diag.cq_polls++;
+	if (found)
+		diag.cq_polls_found++;
+	else
+		diag.cq_polls_empty++;
+}
+
+void dp_diag_cq_arm(void)
+{
+	diag.cq_arms++;
+}
+
 static void *monitor_ev(void *arg)
 {
 	size_t val;
@@ -150,25 +203,35 @@ bool directpath_events_poll(void)
 
 	struct mlx5_eqe *eqes[POLL_EQ_BATCH_SIZE];
 
+	diag.eq_polls++;
+
 	for (i = 0; i < POLL_EQ_BATCH_SIZE; i++) {
 		eqe = get_head_eqe(eq);
 		if (!eqe)
 			break;
 
+		diag.eq_events_total++;
+
 		switch (eqe->type) {
 			case MLX5_EVENT_TYPE_COMP:
 				eqes[nr_compl++] = eqe;
+				diag.eq_comp_events++;
 				break;
 			case MLX5_EVENT_TYPE_CMD:
 				directpath_handle_cmd_eqe(eqe);
+				diag.eq_cmd_events++;
 				break;
 			case MLX5_EVENT_TYPE_CQ_ERROR:
 				directpath_handle_cq_error_eqe(eqe);
+				diag.eq_error_events++;
 				break;
 			case MLX5_EVENT_TYPE_SRQ_LAST_WQE:
 				log_err("got last wqe %hhu pn %u", eqe->data.qp.type, be32toh(eqe->data.qp.qpn_rqn_sqn) & 0xffffff);
+				diag.eq_other_events++;
+				break;
 			default:
 				log_err("got an eqe! eqe->type: %hhu (%u)", eqe->type, eq->cons_idx);
+				diag.eq_other_events++;
 				break;
 		}
 
@@ -183,6 +246,8 @@ bool directpath_events_poll(void)
 
 		eq_update_ci(eq, 0);
 	}
+
+	dp_diag_print();
 
 	return i > 0;
 }

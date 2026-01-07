@@ -354,6 +354,12 @@ int mlx5_gather_rx_strided(struct mlx5_rxq *v, struct mbuf **ms,
 
 	k = getk();
 
+	/* Diagnostic counters */
+	static uint64_t total_cqes = 0;
+	static uint64_t filler_cqes = 0;
+	static uint64_t hw_drops = 0;
+	static uint64_t last_diag_print = 0;
+
 	while (rx_cnt < budget && !preempt_cede_needed(k)) {
 		cqe = &v->cq.cqes[v->cq.head & (v->cq.cnt - 1)];
 		opcode = cqe_status(cqe, v->cq.cnt, v->cq.head);
@@ -365,18 +371,22 @@ int mlx5_gather_rx_strided(struct mlx5_rxq *v, struct mbuf **ms,
 			panic_error_cqe(cqe, opcode);
 
 		/* Debug: Print every valid CQE with RSS hash */
-		static uint64_t cqe_count = 0;
-		if (++cqe_count % 10000 == 0) {
-			uint32_t rss_hash = mlx5_get_rss_result(cqe);
-			// fprintf(stderr, "[CQE POLL] Queue %u: CQE #%lu, RSS hash = 0x%08x\n",
-			//         k->kthread_idx, cqe_count, rss_hash);
-			fflush(stderr);
-		}
+		// static uint64_t cqe_count = 0;
+		// if (++cqe_count % 10000 == 0) {
+		// 	uint32_t rss_hash = mlx5_get_rss_result(cqe);
+		// 	fprintf(stderr, "[CQE POLL] Queue %u: CQE #%lu, RSS hash = 0x%08x\n",
+		// 	        k->kthread_idx, cqe_count, rss_hash);
+		// 	fflush(stderr);
+		// }
+
+		total_cqes++;
 
 		v->cq.head++;
 		prefetch(&v->cq.cqes[v->cq.head & (v->cq.cnt - 1)]);
 
-		STAT(RX_HW_DROP) += be32toh(cqe->sop_drop_qpn) >> 24;
+		uint32_t sop_drop = be32toh(cqe->sop_drop_qpn) >> 24;
+		hw_drops += sop_drop;
+		STAT(RX_HW_DROP) += sop_drop;
 
 		wqe_idx = be16toh(cqe->wqe_id) & (wq->cnt - 1);
 		stride_idx = be16toh(cqe->wqe_counter);
@@ -390,8 +400,19 @@ int mlx5_gather_rx_strided(struct mlx5_rxq *v, struct mbuf **ms,
 
 		buf = load_acquire(&wq->buffers[wqe_idx]);
 		if (byte_cnt & MLX5_MPRQ_FILLER_MASK) {
+			filler_cqes++;
 			dec_sw_ref(buf, stride_cnt);
 			continue;
+		}
+
+		/* Print diagnostics every 100k CQEs */
+		if (total_cqes - last_diag_print >= 10) {
+			fprintf(stderr, "[STRIDED DIAG] total_cqes=%lu, filler=%lu (%.1f%%), hw_drops=%lu, rx_cnt_now=%d\n",
+			        total_cqes, filler_cqes,
+			        total_cqes > 0 ? (100.0 * filler_cqes / total_cqes) : 0.0,
+			        hw_drops, rx_cnt);
+			fflush(stderr);
+			last_diag_print = total_cqes;
 		}
 
 		buf += stride_idx * DIRECTPATH_STRIDE_SIZE;
@@ -467,7 +488,7 @@ int mlx5_gather_rx_strided(struct mlx5_rxq *v, struct mbuf **ms,
 
 			/* Print 5-tuple for debugging */
 			static uint64_t pkt_print_count = 0;
-			if (pkt_print_count++ % 1000 == 0) {
+			if (pkt_print_count++ % 1 == 0) {
 				fprintf(stderr, "[5-TUPLE] Pkt #%lu: ", pkt_print_count);
 				print_ip(src_ip);
 				fprintf(stderr, ":%u -> ", src_port);
@@ -479,7 +500,7 @@ int mlx5_gather_rx_strided(struct mlx5_rxq *v, struct mbuf **ms,
 	}
 
 	/* Print statistics every 100 packets */
-	if (total_tracked > 0 && total_tracked % 10 == 0) {
+	if (total_tracked > 0 && total_tracked % 100 == 0) {
 		fprintf(stderr, "\n[PORT STATS STRIDED] Total tracked: %lu, Unknown ports: %lu\n",
 		        total_tracked, unknown_port_count);
 		for (int j = 0; j < 15; j++) {

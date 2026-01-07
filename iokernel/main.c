@@ -282,6 +282,7 @@ int main(int argc, char *argv[])
 			cfg.noidlefastwake = true;
 		} else if (!strcmp(argv[i], "dpactiverss")) {
 			cfg.directpath_active_rss = true;
+            printf("activating directpath_active_rss\n"); 
 		} else if (!strcmp(argv[i], "nohugepages")) {
 			cfg.no_hugepages = true;
 			cfg_transparent_hugepages_enabled = true;

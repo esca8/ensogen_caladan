@@ -39,6 +39,7 @@ static void directpath_arm_queue(struct directpath_ctx *ctx, struct cq *cq, uint
 	barrier();
 	bitmap_set(ctx->armed_rx_queues, cq->qp_idx);
 	ctx->nr_armed++;
+	dp_diag_cq_arm();
 }
 
 static void directpath_enable_queue(struct directpath_ctx *ctx, unsigned int idx)
@@ -108,6 +109,7 @@ static uint64_t directpath_poll_cq_delay(struct directpath_ctx *ctx,
 	cons_idx = ACCESS_ONCE(th->q_ptrs->directpath_rx_tail);
 	cqe = get_cqe(cq, cons_idx);
 	if (!cqe) {
+		dp_diag_cq_poll(false);
 		if (++null_count % 100000000 == 0) {
 			fprintf(stderr, "[IOK CQ_POLL] No CQE found (%lu times), cons_idx=%u\n",
 			        null_count, cons_idx);
@@ -116,6 +118,8 @@ static uint64_t directpath_poll_cq_delay(struct directpath_ctx *ctx,
 		if (do_arm) directpath_arm_queue(ctx, cq, cons_idx);
 		return 0;
 	}
+
+	dp_diag_cq_poll(true);
 
 	/* Track packet statistics */
 	cq->rx_packets++;

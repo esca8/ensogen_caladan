@@ -759,6 +759,9 @@ static int create_rqt(struct directpath_ctx *dp)
 	uint32_t nr_entries = u16_round_pow2(dp->nr_qs);
 	void *rqtc;
 
+	fprintf(stderr, "[RQT] Creating RQT: nr_qs=%u, nr_entries=%u, directpath_active_rss=%d\n",
+	        dp->nr_qs, nr_entries, cfg.directpath_active_rss);
+
 	inlen = DEVX_ST_SZ_BYTES(create_rqt_in) + DEVX_ST_SZ_BYTES(rq_num) * nr_entries;
 	in = calloc(1, inlen);
 	if (!in)
@@ -770,10 +773,14 @@ static int create_rqt(struct directpath_ctx *dp)
 	DEVX_SET(rqtc, rqtc, rqt_max_size, nr_entries);
 	DEVX_SET(rqtc, rqtc, rqt_actual_size, nr_entries);
 
+	fprintf(stderr, "[RQT] Initial entries: ");
 	for (i = 0; i < nr_entries; i++) {
 		unsigned int idx = !cfg.directpath_active_rss ? (i % dp->nr_qs) : 0;
 		DEVX_SET(rqtc, rqtc, rq_num[i], dp->rqns[idx]);
+		fprintf(stderr, "[%u]=0x%x ", i, dp->rqns[idx]);
 	}
+	fprintf(stderr, "\n");
+	fflush(stderr);
 
 	dp->rqt_obj = mlx5dv_devx_obj_create(vfcontext, in, inlen, out, sizeof(out));
 	free(in);

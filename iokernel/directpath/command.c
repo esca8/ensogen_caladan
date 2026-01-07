@@ -90,6 +90,17 @@ static void command_rss_update(struct directpath_ctx *ctx, struct cmd_slot *s)
 		         DEVX_GET(modify_rqt_in, in, ctx.rq_num[i - ctx->nr_qs]));
 	}
 
+	/* Debug: print RQT contents after update */
+	fprintf(stderr, "[RQT UPDATE] nr_active=%u, sw_gen=%lu, hw_gen=%lu\n",
+	        nr_active, ctx->sw_rss_gen, ctx->hw_rss_gen);
+	fprintf(stderr, "[RQT UPDATE] Entries: ");
+	for (i = 0; i < nr_entries; i++) {
+		uint32_t rqn = DEVX_GET(modify_rqt_in, in, ctx.rq_num[i]);
+		fprintf(stderr, "[%u]=0x%x ", i, rqn);
+	}
+	fprintf(stderr, "\n");
+	fflush(stderr);
+
 	s->submitted_rss_gen = ctx->sw_rss_gen;
 	command_submit_final(in, inlen, DEVX_ST_SZ_BYTES(modify_rqt_out), s,
 	                     MLX5_CMD_RSS_UPDATE);
