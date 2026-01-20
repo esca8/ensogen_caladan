@@ -467,7 +467,7 @@ int mlx5_verbs_init_context(bool uses_qsteering)
 	}
 
 	for (i = 0; dev_list[i]; i++) {
-		if (strncmp(ibv_get_device_name(dev_list[i]), "mlx5", 4))
+		if (strncmp(ibv_get_device_name(dev_list[i]), "rocep5s0f1", 4))
 			continue;
 
 		if (ibv_device_to_pci_addr(dev_list[i], &pci_addr)) {

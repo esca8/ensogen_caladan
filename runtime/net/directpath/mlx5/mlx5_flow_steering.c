@@ -286,10 +286,14 @@ static int mlx5_register_flow(unsigned int affinity, struct trans_entry *e, void
 			DEVX_SET(fte_match_param, key.buf, outer_headers.tcp_dport, e->laddr.port);
 			break;
 		case IPPROTO_UDP:
+            log_info("!! mlx5_register_flow: IPPROTO_UDP");
 			map = udp_listen_ports;
 			match = udp_tbl_dport_match;
 			dst_tbl = udp_sport_tbl;
 			DEVX_SET(fte_match_param, key.buf, outer_headers.udp_dport, e->laddr.port);
+            log_info("udp_dport set to %u (port=%u)",                                                  
+                DEVX_GET(fte_match_param, key.buf, outer_headers.udp_dport),                           
+                e->laddr.port); 
 			break;
 		default:
 			return -EINVAL;
@@ -440,6 +444,7 @@ out_destroy_domain:
 
 int mlx5_init_flow_steering(void)
 {
+    log_info("!! mlx5_init_flow_steering");
 	int ret;
 
 	ret = mlx5_init_flows();

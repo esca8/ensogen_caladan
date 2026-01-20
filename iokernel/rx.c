@@ -27,6 +27,7 @@ static union rxq_cmd rx_make_cmd(struct rte_mbuf *buf)
 	uint64_t masked_ol_flags;
 
 	cmd.len = rte_pktmbuf_pkt_len(buf);
+    log_info("cmd.len: %d", cmd.len);
 	cmd.rxcmd = RX_NET_RECV;
 	masked_ol_flags = buf->ol_flags & RTE_MBUF_F_RX_IP_CKSUM_MASK;
 	if (masked_ol_flags == RTE_MBUF_F_RX_IP_CKSUM_GOOD)
@@ -142,7 +143,7 @@ static void rx_one_pkt(struct rte_mbuf *buf)
 		}
 	}
 
-	log_debug("rx: rx packet with MAC %02" PRIx8 " %02" PRIx8 " %02"
+	log_warn("rx: rx packet with MAC %02" PRIx8 " %02" PRIx8 " %02"
 		  PRIx8 " %02" PRIx8 " %02" PRIx8 " %02" PRIx8,
 		  ptr_dst_addr->addr_bytes[0], ptr_dst_addr->addr_bytes[1],
 		  ptr_dst_addr->addr_bytes[2], ptr_dst_addr->addr_bytes[3],
