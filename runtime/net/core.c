@@ -234,7 +234,7 @@ void net_error(struct mbuf *m, int err)
 
 static void net_rx_one(struct mbuf *m)
 {
-    log_info("core.c: start net_rx_one | len1=%d\n", mbuf_length(m));
+    log_debug("core.c: start net_rx_one | len1=%d\n", mbuf_length(m));
 	const struct eth_hdr *llhdr;
 	const struct ip_hdr *iphdr;
 	uint16_t len;

@@ -924,7 +924,7 @@ void udp_destroy_spawner(udpspawner_t *s)
 ssize_t udp_send(const void *buf, size_t len,
 		 struct netaddr laddr, struct netaddr raddr)
 {
-    log_warn("!! hit udp_send !!"); 
+    log_debug("!! hit udp_send !!"); 
 	void *payload;
 	struct mbuf *m;
 	int ret;

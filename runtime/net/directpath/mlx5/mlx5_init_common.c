@@ -9,6 +9,7 @@
 #include "mlx5.h"
 
 bool cfg_directpath_strided = false;
+uint64_t prev_print_time = 0; 
 
 static int null_register_flow(unsigned int a, struct trans_entry *e, void **h)
 {
@@ -73,8 +74,60 @@ static void mlx5_softirq(void *arg)
 	}
 }
 
+void mlx5_print_kthread_stats(char *caller)
+{
+	uint64_t now_tsc = rdtsc();
+	uint64_t total_rx_packets = 0, total_rx_bytes = 0;
+	uint64_t total_tx_packets = 0, total_tx_bytes = 0;
+	uint64_t total_drops = 0, total_hw_drops = 0;
+	int i;
+
+	/* Print stats every 5 seconds */
+	if ((uint64_t)(now_tsc - prev_print_time) < (uint64_t)(cycles_per_us) * 5000000) {
+		return;
+    }
+	prev_print_time = now_tsc;
+
+	fprintf(stderr, "\n=== Runtime Per-Kthread Stats at %lu us [%s] ===\n",
+	        now_tsc / cycles_per_us, caller);
+	fprintf(stderr, "  Max kthreads: %d\n", maxks);
+
+	fprintf(stderr, "\n  Per-Kthread Status:\n");
+	fprintf(stderr, "  KThr | State  | RX Packets | RX Bytes   | TX Packets | TX Bytes   | SW Drops | HW Drops\n");
+	fprintf(stderr, "  -----|--------|------------|------------|------------|------------|----------|----------\n");
+
+	for (i = 0; i < maxks; i++) {
+		struct kthread *k = &ks[i];
+		const char *state = ACCESS_ONCE(k->parked) ? "PARKED" : "ACTIVE";
+		uint64_t rx_pkts = k->stats[STAT_RX_PACKETS];
+		uint64_t rx_bytes = k->stats[STAT_RX_BYTES];
+		uint64_t tx_pkts = k->stats[STAT_TX_PACKETS];
+		uint64_t tx_bytes = k->stats[STAT_TX_BYTES];
+		uint64_t drops = k->stats[STAT_DROPS];
+		uint64_t hw_drops = k->stats[STAT_RX_HW_DROP];
+
+		fprintf(stderr, "  %4d | %6s | %10lu | %10lu | %10lu | %10lu | %8lu | %8lu\n",
+		        i, state, rx_pkts, rx_bytes, tx_pkts, tx_bytes, drops, hw_drops);
+
+		total_rx_packets += rx_pkts;
+		total_rx_bytes += rx_bytes;
+		total_tx_packets += tx_pkts;
+		total_tx_bytes += tx_bytes;
+		total_drops += drops;
+		total_hw_drops += hw_drops;
+	}
+
+	fprintf(stderr, "  -----|--------|------------|------------|------------|------------|----------|----------\n");
+	fprintf(stderr, "  TOTAL|        | %10lu | %10lu | %10lu | %10lu | %8lu | %8lu\n",
+	        total_rx_packets, total_rx_bytes, total_tx_packets, total_tx_bytes, total_drops, total_hw_drops);
+	fprintf(stderr, "\n");
+	fflush(stderr);
+
+}
+
 bool mlx5_rx_poll(unsigned int q_index)
 {
+    mlx5_print_kthread_stats("mlx5_rx_poll");
 	struct mlx5_rxq *v = &rxqs[q_index];
 	thread_t *th = v->poll_th;
 
@@ -90,6 +143,7 @@ bool mlx5_rx_poll(unsigned int q_index)
 
 bool mlx5_rx_poll_locked(unsigned int q_index)
 {
+    mlx5_print_kthread_stats("mlx5_rx_poll_locked");
 	struct mlx5_rxq *v = &rxqs[q_index];
 	thread_t *th = v->poll_th;
 

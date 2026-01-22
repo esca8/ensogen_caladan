@@ -143,7 +143,7 @@ static void rx_one_pkt(struct rte_mbuf *buf)
 		}
 	}
 
-	log_warn("rx: rx packet with MAC %02" PRIx8 " %02" PRIx8 " %02"
+	log_warn_ratelimited("rx: rx packet with MAC %02" PRIx8 " %02" PRIx8 " %02"
 		  PRIx8 " %02" PRIx8 " %02" PRIx8 " %02" PRIx8,
 		  ptr_dst_addr->addr_bytes[0], ptr_dst_addr->addr_bytes[1],
 		  ptr_dst_addr->addr_bytes[2], ptr_dst_addr->addr_bytes[3],
@@ -155,6 +155,28 @@ static void rx_one_pkt(struct rte_mbuf *buf)
 		iphdr = rte_pktmbuf_mtod_offset(buf, struct rte_ipv4_hdr *,
 			sizeof(*ptr_mac_hdr));
 		dst_ip = rte_be_to_cpu_32(iphdr->dst_addr);
+
+        /* Add 5-tuple logging */
+        uint32_t src_ip = rte_be_to_cpu_32(iphdr->src_addr);
+        uint8_t proto = iphdr->next_proto_id;
+        uint16_t sport = 0, dport = 0;
+
+        if (proto == IPPROTO_UDP || proto == IPPROTO_TCP) {
+            /* UDP and TCP have src/dst port at same offset */
+            struct rte_udp_hdr *l4hdr = rte_pktmbuf_mtod_offset(buf,
+                struct rte_udp_hdr *,
+                sizeof(*ptr_mac_hdr) + sizeof(*iphdr));
+            sport = rte_be_to_cpu_16(l4hdr->src_port);
+            dport = rte_be_to_cpu_16(l4hdr->dst_port);
+        }
+
+        log_warn_ratelimited("rx: 5-tuple: %u.%u.%u.%u:%u -> %u.%u.%u.%u:%u proto=%u",
+            (src_ip >> 24) & 0xFF, (src_ip >> 16) & 0xFF,
+            (src_ip >> 8) & 0xFF, src_ip & 0xFF, sport,
+            (dst_ip >> 24) & 0xFF, (dst_ip >> 16) & 0xFF,
+            (dst_ip >> 8) & 0xFF, dst_ip & 0xFF, dport,
+            proto);
+            
 		if (unlikely(!(buf->ol_flags & RTE_MBUF_F_RX_RSS_HASH)))
 			STAT_INC(RX_HASH_MISSING, 1);
 	} else if (ether_type == ETHTYPE_ARP) {
