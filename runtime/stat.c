@@ -211,6 +211,7 @@ static void stat_worker_udp(void *arg)
 
 	while (true) {
 		ret = udp_read_from(c, buf, payload_size, &raddr);
+        log_info("stat_worker_udp->udp_read_from: read %ld bytes", ret);
 		if (ret < cmd_len)
 			continue;
 		if (strncmp(buf, "stat", cmd_len) != 0)

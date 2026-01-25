@@ -123,7 +123,7 @@ static void dataplane_loop_vfio(void)
 void dataplane_loop(void)
 {
 	bool work_done;
-#if 0
+#if 1
 	uint64_t next_log_time = microtime();
 #endif
 
@@ -167,9 +167,10 @@ void dataplane_loop(void)
 
 		STAT_INC(LOOPS, 1);
 
-#if 0
+#if 1
 		if (microtime() > next_log_time) {
 			dpdk_print_eth_stats();
+            log_info("count unhandled packets: %ld", stats[RX_UNHANDLED]);
 			next_log_time += LOG_INTERVAL_US;
 		}
 #endif

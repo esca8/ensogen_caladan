@@ -354,7 +354,18 @@ int mlx5_gather_rx(struct mlx5_rxq *v, struct mbuf **ms, unsigned int budget)
 		if (unlikely(opcode != MLX5_CQE_RESP_SEND))
 			panic_error_cqe(cqe, opcode);
 
-		STAT(RX_HW_DROP) += be32toh(cqe->sop_drop_qpn) >> 24;
+        uint32_t drop_cnt = be32toh(cqe->sop_drop_qpn) >> 24;
+		STAT(RX_HW_DROP) += drop_cnt; 
+
+        if (drop_cnt > 0) {
+            int kt_idx = myk() ? kthread_idx(myk()) : -1;
+            uint32_t wq_pending = v->wq.head - v->cq.head;
+            uint32_t wq_capacity = v->wq.cnt;
+            bool parked = myk() ? ACCESS_ONCE(myk()->parked) : false;
+
+            log_warn("HW_DROP: kt=%d drops=%u total=%lu pending=%u/%u parked=%d cq_head=%u",
+                    kt_idx, drop_cnt, STAT(RX_HW_DROP), wq_pending, wq_capacity, parked, v->cq.head);
+        }
 
 		wqe_idx = be16toh(cqe->wqe_counter) & (v->wq.cnt - 1);
 		m = v->wq.buffers[wqe_idx];

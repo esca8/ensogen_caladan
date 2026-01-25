@@ -170,12 +170,19 @@ static void rx_one_pkt(struct rte_mbuf *buf)
             dport = rte_be_to_cpu_16(l4hdr->dst_port);
         }
 
-        log_warn_ratelimited("rx: 5-tuple: %u.%u.%u.%u:%u -> %u.%u.%u.%u:%u proto=%u",
+        char buf2[128];
+        snprintf(buf2, sizeof(buf2), "rx: 5-tuple: %u.%u.%u.%u:%u -> %u.%u.%u.%u:%u proto=%u",
             (src_ip >> 24) & 0xFF, (src_ip >> 16) & 0xFF,
             (src_ip >> 8) & 0xFF, src_ip & 0xFF, sport,
             (dst_ip >> 24) & 0xFF, (dst_ip >> 16) & 0xFF,
             (dst_ip >> 8) & 0xFF, dst_ip & 0xFF, dport,
             proto);
+        if(((src_ip >> 8) & 0xFF) != 1 || (src_ip & 0xFF) != 0 || sport != 80
+        || ((dst_ip >> 8) & 0xFF) != 0 || (dst_ip & 0xFF) != 1 || dport != 8080) {
+            log_warn("RX PKT: invalid! %s", buf2);
+        } else {
+            log_warn_ratelimited(buf2); 
+        }
             
 		if (unlikely(!(buf->ol_flags & RTE_MBUF_F_RX_RSS_HASH)))
 			STAT_INC(RX_HASH_MISSING, 1);
@@ -238,10 +245,11 @@ static void rx_one_pkt(struct rte_mbuf *buf)
 
 fail_free:
 	/* anything else */
-	log_debug("rx: unhandled packet with MAC %x %x %x %x %x %x",
+	log_warn_ratelimited("rx: unhandled packet with MAC %x %x %x %x %x %x | total: %ld",
 		 ptr_dst_addr->addr_bytes[0], ptr_dst_addr->addr_bytes[1],
 		 ptr_dst_addr->addr_bytes[2], ptr_dst_addr->addr_bytes[3],
-		 ptr_dst_addr->addr_bytes[4], ptr_dst_addr->addr_bytes[5]);
+		 ptr_dst_addr->addr_bytes[4], ptr_dst_addr->addr_bytes[5], 
+         stats[RX_UNHANDLED]);
 	rte_pktmbuf_free(buf);
 	STAT_INC(RX_UNHANDLED, 1);
 }
