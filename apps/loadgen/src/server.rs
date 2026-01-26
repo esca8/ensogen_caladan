@@ -95,8 +95,9 @@ pub fn run_spawner_server(addr: SocketAddrV4, workerspec: &str) {
             let mut payload = Payload::deserialize(&mut &buf[..]).unwrap();
             #[allow(static_mut_refs)]
             let worker = SPAWNER_WORKER.as_ref().unwrap();
-            worker.work(payload.work_iterations, payload.randomness);
-            payload.randomness = shenango::rdtsc();
+            worker.work(0, 0); 
+            // worker.work(payload.work_iterations, payload.randomness);
+            // payload.randomness = shenango::rdtsc();
             let mut array = ArrayVec::<_, PAYLOAD_SIZE>::new();
             payload.serialize_into(&mut array).unwrap();
             let _ = UdpSpawner::reply(d, array.as_slice());

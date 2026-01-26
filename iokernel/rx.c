@@ -183,6 +183,24 @@ static void rx_one_pkt(struct rte_mbuf *buf)
         } else {
             log_warn_ratelimited(buf2); 
         }
+
+        uint8_t *payload = rte_pktmbuf_mtod_offset(buf, uint8_t *,    // = offset 42
+                                sizeof(struct rte_ether_hdr) +    // 14
+                                sizeof(struct rte_ipv4_hdr) +     // 20
+                                sizeof(struct rte_udp_hdr));      // 8
+        if (memcmp(payload, "abcdefghijklmnopqrstuvwx", 24) == 0) {
+            log_warn_ratelimited("ORIGINAL request from pktgen");
+        } else if (memcmp(payload, "abcdefghijkl", 12) == 0) {
+            char *buf3[25]; 
+            memcpy(buf3, payload, 24); 
+            buf3[24] = '\0'; 
+            log_info("LOOPED-BACK response (first 12 bytes match, randomness changed): %s", buf3);
+        } else {
+            char *buf3[25]; 
+            memcpy(buf3, payload, 24); 
+            buf3[24] = '\0'; 
+            log_info("UNKNOWN payload: %s", buf3);
+        }
             
 		if (unlikely(!(buf->ol_flags & RTE_MBUF_F_RX_RSS_HASH)))
 			STAT_INC(RX_HASH_MISSING, 1);
