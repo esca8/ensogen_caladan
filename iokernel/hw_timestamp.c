@@ -107,7 +107,8 @@ int hw_timestamp_init(void)
 	}
 
 	for (i = 0; dev_list[i]; i++) {
-		if (strncmp(ibv_get_device_name(dev_list[i]), "rocep5s0f1", 4))
+        log_info("device name: %s", ibv_get_device_name(dev_list[i]));
+		if (strncmp(ibv_get_device_name(dev_list[i]), "mlx5_0", 6))
 			continue;
 
 		if (!nic_pci_addr_str)

@@ -177,7 +177,7 @@ static void rx_one_pkt(struct rte_mbuf *buf)
             (dst_ip >> 24) & 0xFF, (dst_ip >> 16) & 0xFF,
             (dst_ip >> 8) & 0xFF, dst_ip & 0xFF, dport,
             proto);
-        if(((src_ip >> 8) & 0xFF) != 1 || (src_ip & 0xFF) != 0 || sport != 80
+        if(((src_ip >> 8) & 0xFF) != 1 || (src_ip & 0xFF) != 1 || sport != 80
         || ((dst_ip >> 8) & 0xFF) != 0 || (dst_ip & 0xFF) != 1 || dport != 8080) {
             log_warn("RX PKT: invalid! %s", buf2);
         } else {

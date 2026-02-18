@@ -925,6 +925,8 @@ ssize_t udp_send(const void *buf, size_t len,
 		 struct netaddr laddr, struct netaddr raddr)
 {
     log_debug("!! hit udp_send !!"); 
+    uint32_t daddr = raddr.ip; 
+    // log_info("dest ip: %d.%d.%d.%d:%d\n", (daddr>>24)&0xFF, (daddr>>16)&0xFF, (daddr>>8)&0xFF, (daddr)&0xFF, (uint32_t)raddr.port);
 	void *payload;
 	struct mbuf *m;
 	int ret;

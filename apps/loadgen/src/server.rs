@@ -28,7 +28,8 @@ pub fn run_linux_udp_server(config: AppConfig) {
                 loop {
                     let (len, remote_addr) = socket.recv_from(&mut buf[..]).unwrap();
                     let payload = Payload::deserialize(&mut &buf[..len]).unwrap();
-                    worker.work(payload.work_iterations, payload.randomness);
+                    // worker.work(payload.work_iterations, payload.randomness);
+                    worker.work(payload.work_iterations, 0);
                     socket.send_to(&buf[..len], remote_addr).unwrap();
                 }
             })
@@ -46,8 +47,9 @@ fn socket_worker(socket: &mut Connection, worker: Arc<FakeWorker>) {
         socket.read_exact(&mut v[..PAYLOAD_SIZE])?;
         let mut payload = Payload::deserialize(&mut &v[..PAYLOAD_SIZE])?;
         v.clear();
-        worker.work(payload.work_iterations, payload.randomness);
-        payload.randomness = shenango::rdtsc();
+        // worker.work(payload.work_iterations, payload.randomness);
+        worker.work(payload.work_iterations, 0);
+        // payload.randomness = shenango::rdtsc();
         payload.serialize_into(&mut v)?;
         Ok(socket.write_all(&v[..])?)
     };
@@ -95,12 +97,13 @@ pub fn run_spawner_server(addr: SocketAddrV4, workerspec: &str) {
             let mut payload = Payload::deserialize(&mut &buf[..]).unwrap();
             #[allow(static_mut_refs)]
             let worker = SPAWNER_WORKER.as_ref().unwrap();
-            worker.work(0, 0); 
+            // println!("Work iter: {}", payload.work_iterations);
+            // worker.work(0, 0); 
             // worker.work(payload.work_iterations, payload.randomness);
-            // payload.randomness = shenango::rdtsc();
+            worker.work(payload.work_iterations, 0);
             let mut array = ArrayVec::<_, PAYLOAD_SIZE>::new();
             payload.serialize_into(&mut array).unwrap();
-            let _ = UdpSpawner::reply(d, array.as_slice());
+            let _ = UdpSpawner::reply(d, array.as_slice()); // TODO: why is d's ip addr 0.0.0.1 inside reply()
             UdpSpawner::release_data(d);
         }
     }

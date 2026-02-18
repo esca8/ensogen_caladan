@@ -199,6 +199,15 @@ impl UdpSpawner {
     }
 
     pub unsafe fn reply(d: *mut ffi::udp_spawn_data, buf: &[u8]) -> io::Result<usize> {
+        // let raddr = (*d).raddr;
+        // let raddr_port = (*d).raddr.port;
+        // let ip = raddr.ip;
+        // println!("in app's echo: raddr: {}.{}.{}.{:}:{}",
+        //     (ip >> 24) & 0xff,
+        //     (ip >> 16) & 0xff,
+        //     (ip >> 8) & 0xff,
+        //     ip & 0xff,
+        //     raddr_port); 
         isize_to_result(ffi::udp_send(
             buf.as_ptr() as *const c_void,
             buf.len() as _,

@@ -608,7 +608,13 @@ void net_tx_eth(struct mbuf *m, uint16_t type, const struct eth_addr *dhost, boo
 {
 	struct eth_hdr *eth_hdr;
 	eth_hdr = mbuf_push_hdr(m, *eth_hdr);
-	eth_hdr->shost = netcfg.mac;
+    struct eth_addr shost = {
+        .addr = { 0x12, 0x34, 0x56, 0x78, 0x90, 0x12 }
+    };
+    // log_info("MAC: %02X:%02X:%02X:%02X:%02X:%02X",                          
+    //   netcfg.mac.addr[0], netcfg.mac.addr[1], netcfg.mac.addr[2],         
+    //   netcfg.mac.addr[3], netcfg.mac.addr[4], netcfg.mac.addr[5]); 
+	eth_hdr->shost = shost; // netcfg.mac;
 	eth_hdr->dhost = *dhost;
 	eth_hdr->type = hton16(type);
 	m->txflags |= is_local ? TXFLAG_LOCAL : 0;
@@ -712,7 +718,10 @@ static int net_tx_local_loopback(struct mbuf *m_in, uint8_t proto)
 int net_tx_ip(struct mbuf *m, uint8_t proto, uint32_t daddr, uint32_t saddr,
               const struct aux_tx_pkt_data *aux)
 {
-	struct eth_addr dhost;
+    struct eth_addr dhost = {
+        .addr = { 0xB8, 0x59, 0x9F, 0x0B, 0x3B, 0xFF }
+        // .addr = { 0xFF, 0xFF, 0xFF, 0xFF, 0xFF, 0xFF }
+    };
 	int ret;
 	bool local;
 
@@ -724,19 +733,22 @@ int net_tx_ip(struct mbuf *m, uint8_t proto, uint32_t daddr, uint32_t saddr,
 	}
 
 	/* prepend the IP header */
+    // log_info("core.c: dest ip: %d.%d.%d.%d\n", (daddr>>24)&0xFF, (daddr>>16)&0xFF, (daddr>>8)&0xFF, (daddr)&0xFF);
+    daddr = MAKE_IP_ADDR(192, 168, 0, 1); 
+    // log_info("core.c force: dest ip: %d.%d.%d.%d\n", (daddr>>24)&0xFF, (daddr>>16)&0xFF, (daddr>>8)&0xFF, (daddr)&0xFF);
+
 	net_push_iphdr(m, proto, daddr, saddr, aux);
 	mbuf_mark_network_offset(m);
 
 	/* route loopbacks */
-	if (daddr == netcfg.addr || daddr == MAKE_IP_ADDR(127, 0, 0, 1))
-		return net_tx_local_loopback(m, proto);
+	// if (daddr == netcfg.addr || daddr == MAKE_IP_ADDR(127, 0, 0, 1))
+	// 	return net_tx_local_loopback(m, proto);
 
 	/* ask NIC to calculate IP checksum */
 	m->txflags |= OLFLAG_IP_CHKSUM | OLFLAG_IPV4;
 
 	/* apply IP routing */
-	daddr = net_get_ip_route(daddr);
-
+	// daddr = net_get_ip_route(daddr);
 	/* need to use ARP to resolve dhost */
 	// ret = arp_lookup(daddr, &dhost, m, &local);
 	// if (unlikely(ret)) {
