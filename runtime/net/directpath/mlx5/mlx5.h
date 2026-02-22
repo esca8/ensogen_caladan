@@ -96,6 +96,7 @@ extern int mlx5_init_queue_steering(void);
 extern int mlx5_rx_stride_init(void);
 extern int mlx5_rx_stride_init_thread(void);
 extern int mlx5_rx_stride_init_bufs(void);
+extern int mlx5_start_flow_counter_monitor(void);
 
 // Lower level intialization functions
 extern int mlx5_init_cq(struct mlx5_cq *cq, struct mlx5_cqe64 *cqes,

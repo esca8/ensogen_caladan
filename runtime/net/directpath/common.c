@@ -194,6 +194,13 @@ int directpath_init_late(void)
 	if (netcfg.directpath_mode != DIRECTPATH_MODE_FLOW_STEERING)
 		return 0;
 
+    /* Start the periodic flow counter monitor */
+    printf("rutime: starting flow counter monitor");
+	int ret = mlx5_start_flow_counter_monitor();
+	if (ret)
+		log_warn("directpath: failed to start flow counter monitor, ret=%d", ret);
+
+
 	flow_worker_th = thread_create(flow_registration_worker, NULL);
 	if (!flow_worker_th)
 		return -ENOMEM;

@@ -135,3 +135,10 @@ union match {
 	};
 	struct mlx5dv_flow_match_parameters params;
 };
+
+/*
+ * Flow counter command opcodes and structures
+ */
+#define MLX5_CMD_OP_ALLOC_FLOW_COUNTER 0x939
+#define MLX5_CMD_OP_DEALLOC_FLOW_COUNTER 0x93a
+#define MLX5_CMD_OP_QUERY_FLOW_COUNTER 0x93b
