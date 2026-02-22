@@ -99,7 +99,6 @@ pub fn run_spawner_server(addr: SocketAddrV4, workerspec: &str) {
             let worker = SPAWNER_WORKER.as_ref().unwrap();
             // println!("Work iter: {}", payload.work_iterations);
             // worker.work(0, 0); 
-            // worker.work(payload.work_iterations, payload.randomness);
             worker.work(payload.work_iterations, 0);
             let mut array = ArrayVec::<_, PAYLOAD_SIZE>::new();
             payload.serialize_into(&mut array).unwrap();

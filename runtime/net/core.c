@@ -367,8 +367,6 @@ static void iokernel_softirq_poll(struct kthread *k)
 	union rxq_cmd cmd;
 	unsigned long payload;
 
-    log_info("iokernel_softirq_poll: payload len = "); 
-
 	while (true) {
 		if (!lrpc_recv(&k->rxq, &cmd.lrpc_cmd, &payload))
 			break;
