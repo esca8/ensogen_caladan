@@ -209,18 +209,6 @@ static int query_flow_counter(struct flow_counter *cnt, uint64_t *packets, uint6
 	return 0;
 }
 
-static void destroy_flow_counter(struct flow_counter *cnt)
-{
-	if (cnt->action) {
-		mlx5dv_dr_action_destroy(cnt->action);
-		cnt->action = NULL;
-	}
-	if (cnt->devx_obj) {
-		mlx5dv_devx_obj_destroy(cnt->devx_obj);
-		cnt->devx_obj = NULL;
-	}
-}
-
 static int mlx5_tbl_init(struct tbl *tbl, int level, struct mlx5dv_dr_action *default_egress)
 {
 	struct mlx5dv_dr_action *action[1] = {default_egress};
@@ -684,6 +672,11 @@ bool mlx5_sw_flow_steering_early_init(void)
 
 	RT_FS_DBG("=== mlx5_sw_flow_steering_early_init: START ===");
 
+    struct mlx5dv_context dv_ctx = { 0 };
+    dv_ctx.comp_mask = 0;
+    mlx5dv_query_device(context, &dv_ctx);
+    log_info("DEVX flags: 0x%lx", (unsigned long)dv_ctx.flags);
+
 	errno = 0;
 	dmn = mlx5dv_dr_domain_create(context,
 		MLX5DV_DR_DOMAIN_TYPE_NIC_RX);
@@ -783,7 +776,7 @@ void mlx5_print_flow_counters(void)
 	uint64_t packets, bytes;
 	int i, ret;
 
-	log_info("\n========================================");
+	log_info("========================================");
 	log_info("FLOW STEERING HIT COUNTERS");
 	log_info("========================================");
 
