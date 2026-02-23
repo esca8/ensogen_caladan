@@ -41,6 +41,7 @@ struct flow_counter {
 
 /* Counters for each level of the flow steering hierarchy */
 static struct flow_counter	cnt_root_tcp;
+static struct flow_counter	cnt_catchall;
 static struct flow_counter	cnt_root_udp;
 static struct flow_counter	cnt_last_level_fgs[NCPU];
 
@@ -429,9 +430,7 @@ static int mlx5_init_root_table(void)
 		return ret;
 
 	mask.size = DEVX_ST_SZ_BYTES(fte_match_param);
-	DEVX_SET(fte_match_param, mask.buf, outer_headers.ethertype, __devx_mask(16));
-	DEVX_SET(fte_match_param, mask.buf, outer_headers.dst_ipv4_dst_ipv6.ipv4_layout.ipv4, __devx_mask(32));
-	DEVX_SET(fte_match_param, mask.buf, outer_headers.ip_version, __devx_mask(4));
+	/* DIAG: only match on ip_protocol to test which field is broken */
 	DEVX_SET(fte_match_param, mask.buf, outer_headers.ip_protocol, __devx_mask(8));
 	match_ip_and_tport = mlx5dv_dr_matcher_create(root_tbl, 0, DR_MATCHER_CRITERIA_OUTER, &mask.params);
 	if (!match_ip_and_tport)
@@ -445,9 +444,7 @@ static int mlx5_init_root_table(void)
 	         netcfg.addr & 0xFF);
 	log_info("  Action: count + forward to tcp_tbl (level 1)");
 
-	DEVX_SET(fte_match_param, mask.buf, outer_headers.ethertype, ETHTYPE_IP);
-	DEVX_SET(fte_match_param, mask.buf, outer_headers.ip_version, IPVERSION);
-	DEVX_SET(fte_match_param, mask.buf, outer_headers.dst_ipv4_dst_ipv6.ipv4_layout.ipv4, netcfg.addr);
+	/* DIAG: only set ip_protocol value */
 	DEVX_SET(fte_match_param, mask.buf, outer_headers.ip_protocol, IPPROTO_TCP);
 	actions[0] = cnt_root_tcp.action;
 	actions[1] = tcp_tbl.ingress_action;
@@ -477,6 +474,34 @@ static int mlx5_init_root_table(void)
 	log_info("  Rule handle: %p, counter_id: %u - SUCCESS", root_udp_rule, cnt_root_udp.id);
 
 	log_info("\n=== ROOT TABLE INITIALIZATION COMPLETE ===\n");
+
+	/* DIAGNOSTIC: catch-all rule to test if DR pipeline is connected */
+	{
+		struct mlx5dv_dr_matcher *catchall_matcher;
+		struct mlx5dv_dr_rule *catchall_rule;
+		struct mlx5dv_dr_action *catchall_actions[2];
+
+		ret = alloc_flow_counter(&cnt_catchall, "catchall");
+		if (ret) {
+			log_err("DIAG: failed to allocate catchall counter");
+		} else {
+			catchall_matcher = mlx5dv_dr_matcher_create(root_tbl, 1,
+				DR_MATCHER_CRITERIA_EMPTY, &empty_match.params);
+			if (!catchall_matcher) {
+				log_err("DIAG: failed to create catchall matcher, errno=%d", errno);
+			} else {
+				catchall_actions[0] = cnt_catchall.action;
+				catchall_actions[1] = udp_tbl.ingress_action;
+				catchall_rule = mlx5dv_dr_rule_create(catchall_matcher,
+					&empty_match.params, 2, catchall_actions);
+				if (!catchall_rule) {
+					log_err("DIAG: failed to create catchall rule, errno=%d", errno);
+				} else {
+					log_info("DIAG: catch-all rule created at priority 1");
+				}
+			}
+		}
+	}
 
 	return 0;
 }
@@ -793,6 +818,13 @@ void mlx5_print_flow_counters(void)
 		log_info("  UDP:  %lu packets, %lu bytes", packets, bytes);
 	else
 		log_info("  UDP:  query failed (ret=%d)", ret);
+
+	/* DIAGNOSTIC: catch-all counter */
+	ret = query_flow_counter(&cnt_catchall, &packets, &bytes);
+	if (ret == 0)
+		log_info("  CATCH-ALL:  %lu packets, %lu bytes", packets, bytes);
+	else
+		log_info("  CATCH-ALL:  query failed (ret=%d)", ret);
 
 	/* Level 3: Last level flow group counters */
 	log_info("Level 3 (last_level_fgs):");
