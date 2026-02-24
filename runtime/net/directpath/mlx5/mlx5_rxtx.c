@@ -370,6 +370,37 @@ int mlx5_gather_rx(struct mlx5_rxq *v, struct mbuf **ms, unsigned int budget)
 		wqe_idx = be16toh(cqe->wqe_counter) & (v->wq.cnt - 1);
 		m = v->wq.buffers[wqe_idx];
 		m = mbuf_fill_cqe(m, cqe);
+
+				// Debug: print packet header and raw bytes
+		{
+			uint8_t *pkt = mbuf_data(m);
+			// Ethernet header is 14 bytes, IP header starts at offset 14
+			uint8_t *ip = pkt + 14;
+			uint32_t saddr = (ip[12] << 24) | (ip[13] << 16) | (ip[14] << 8) | ip[15];
+			uint32_t daddr = (ip[16] << 24) | (ip[17] << 16) | (ip[18] << 8) | ip[19];
+			uint8_t proto = ip[9];
+			// UDP/TCP ports at IP header + 20 bytes
+			uint16_t sport = (ip[20] << 8) | ip[21];
+			uint16_t dport = (ip[22] << 8) | ip[23];
+			log_info("DIRECTPATH_RX: %u.%u.%u.%u:%u -> %u.%u.%u.%u:%u proto=%u len=%u",
+				(saddr >> 24) & 0xFF, (saddr >> 16) & 0xFF, (saddr >> 8) & 0xFF, saddr & 0xFF, sport,
+				(daddr >> 24) & 0xFF, (daddr >> 16) & 0xFF, (daddr >> 8) & 0xFF, daddr & 0xFF, dport,
+				proto, m->len);
+
+			// Print raw first 64 bytes
+			int dump_len = m->len < 64 ? m->len : 64;
+			char hexbuf[200];
+			int pos = 0;
+			for (int i = 0; i < dump_len && pos < 190; i++) {
+				pos += sprintf(hexbuf + pos, "%02x ", pkt[i]);
+				if ((i + 1) % 16 == 0 && i + 1 < dump_len) {
+					log_info("DIRECTPATH_RX RAW[%02d]: %s", i - 15, hexbuf);
+					pos = 0;
+				}
+			}
+			if (pos > 0)
+				log_info("DIRECTPATH_RX RAW[%02d]: %s", (dump_len - 1) / 16 * 16, hexbuf);
+		}
 		ms[rx_cnt] = m;
 	}
 

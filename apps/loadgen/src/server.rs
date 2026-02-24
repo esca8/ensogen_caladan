@@ -48,7 +48,7 @@ fn socket_worker(socket: &mut Connection, worker: Arc<FakeWorker>) {
         let mut payload = Payload::deserialize(&mut &v[..PAYLOAD_SIZE])?;
         v.clear();
         // worker.work(payload.work_iterations, payload.randomness);
-        worker.work(payload.work_iterations, 0);
+        worker.work(0, 0);
         // payload.randomness = shenango::rdtsc();
         payload.serialize_into(&mut v)?;
         Ok(socket.write_all(&v[..])?)
@@ -98,8 +98,8 @@ pub fn run_spawner_server(addr: SocketAddrV4, workerspec: &str) {
             #[allow(static_mut_refs)]
             let worker = SPAWNER_WORKER.as_ref().unwrap();
             // println!("Work iter: {}", payload.work_iterations);
-            // worker.work(0, 0); 
-            worker.work(payload.work_iterations, 0);
+            worker.work(0, 0); 
+            // worker.work(payload.work_iterations, 0);
             let mut array = ArrayVec::<_, PAYLOAD_SIZE>::new();
             payload.serialize_into(&mut array).unwrap();
             let _ = UdpSpawner::reply(d, array.as_slice()); // TODO: why is d's ip addr 0.0.0.1 inside reply()
