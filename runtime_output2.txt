@@ -1,0 +1,197 @@
+ic 192.168.1.0:80 --config server.config --mode spawner-server
+[Thread debugging using libthread_db enabled]
+Using host libthread_db library "/lib/x86_64-linux-gnu/libthread_db.so.1".
+CPU 10| <5> thread: created thread 0 [tid: 121144]
+CPU 10| <5> cpu: detected 16 cores, 2 nodes (2 with mem)
+CPU 10| <3> ****************************************************************************************
+CPU 10| <3> *                           WARNING: NON-OPTIIMIZED BUILD                              *
+CPU 10| <3> *                                                                                      *
+CPU 10| <3> *                        DO NOT USE FOR PERFORMANCE BENCHMARKS                         *
+CPU 10| <3> *                                                                                      *
+CPU 10| <3> ****************************************************************************************
+[  0.002447] CPU 10| <5> loading configuration from 'server.config'
+[CONFIG] runtime_spinning_kthreads set to 15
+[  0.002493] CPU 10| <5> cfg: provisioned 15 cores (6 guaranteed, 9 burstable, 15 spinning)
+[  0.002497] CPU 10| <5> cfg: task is latency critical (LC)
+[  0.002501] CPU 10| <5> cfg: THRESH_QD: 10, THRESH_HT: 0 THRESH_QUANTUM: 100
+[  0.002505] CPU 10| <5> cfg: storage disabled, directpath enabled, transparent hugepages disabled
+[  0.002513] CPU 10| <5> process pid: 121144
+[  0.002569] CPU 10| <5> shm: using 20480 bytes
+[  0.002587] CPU 10| <2> uintr: unavailable
+[  0.002594] CPU 10| <5> net: started network stack
+[  0.002597] CPU 10| <5> net: using the following configuration:
+[  0.002601] CPU 10| <5>   addr:	192.168.1.0
+[  0.002605] CPU 10| <5>   netmask:	255.255.0.0
+[  0.002609] CPU 10| <5>   gateway:	192.168.1.0
+[  0.002613] CPU 10| <5>   mac:		B8:59:9F:0B:3B:D9
+[  0.002618] CPU 10| <5>   mtu:		1500
+[  0.002625] CPU 10| <5> hello??
+
+[  0.002630] CPU 10| <5> !!! directpath: using pci address from iokernel: 0000:05:00.1
+mlx5_init
+=== MLX5 INIT: EXTERNAL MODE + STRIDED RX ===
+[MLX5_INIT] mlx5_init() complete, waiting for per-kthread init
+[  0.002643] CPU 10| <2> directpath_init: selected external mode
+[KTHREAD INIT] Kthread 0 initialized (total kthreads=1, maxks=15)
+[MLX5_INIT_THREAD] Called for kthread 0
+[MLX5_INIT_THREAD] Creating strided softirq thread
+[MLX5_INIT_THREAD] Thread created successfully
+[  0.002982] CPU 10| <5> spawning 15 kthreads
+[New Thread 0x7ffff5f6f640 (LWP 121147)]
+[  0.003242] CPU 12| <5> thread: created thread 1 [tid: 121147]
+[KTHREAD INIT] Kthread 1 initialized (total kthreads=2, maxks=15)
+[New Thread 0x7ffff576e640 (LWP 121148)]
+[  0.003404] CPU 07| <5> thread: created thread 2 [tid: 121148]
+[New Thread 0x7ffff496d640 (LWP 121149)]
+[KTHREAD INIT] Kthread 2 initialized (total kthreads=3, maxks=15)
+[  0.003556] CPU 06| <5> thread: created thread 3 [tid: 121149]
+[KTHREAD INIT] Kthread 3 initialized (total kthreads=4, maxks=15)
+[New Thread 0x7fffef67f640 (LWP 121150)]
+[  0.003806] CPU 09| <5> thread: created thread 4 [tid: 121150]
+[New Thread 0x7fffee77e640 (LWP 121151)]
+[KTHREAD INIT] Kthread 4 initialized (total kthreads=5, maxks=15)
+[MLX5_INIT_THREAD] Called for kthread 1
+[MLX5_INIT_THREAD] Creating strided softirq thread
+[MLX5_INIT_THREAD] Thread created successfully
+[New Thread 0x7fffed67d640 (LWP 121152)]
+[  0.004206] CPU 13| <5> thread: created thread 5 [tid: 121151]
+[KTHREAD INIT] Kthread 5 initialized (total kthreads=6, maxks=15)
+[  0.004515] CPU 07| <5> thread: created thread 6 [tid: 121152]
+[New Thread 0x7fffe6dff640 (LWP 121153)]
+[KTHREAD INIT] Kthread 6 initialized (total kthreads=7, maxks=15)
+[  0.004791] CPU 08| <5> thread: created thread 7 [tid: 121153]
+[MLX5_INIT_THREAD] Called for kthread 2
+[MLX5_INIT_THREAD] Creating strided softirq thread
+[New Thread 0x7fffe5a7e640 (LWP 121154)]
+[MLX5_INIT_THREAD] Thread created successfully
+[KTHREAD INIT] Kthread 7 initialized (total kthreads=8, maxks=15)
+[MLX5_INIT_THREAD] Called for kthread 4
+[MLX5_INIT_THREAD] Creating strided softirq thread
+[MLX5_INIT_THREAD] Thread created successfully
+[  0.005041] CPU 14| <5> thread: created thread 8 [tid: 121154]
+[MLX5_INIT_THREAD] Called for kthread 5
+[MLX5_INIT_THREAD] Creating strided softirq thread
+[KTHREAD INIT] Kthread 8 initialized (total kthreads=9, maxks=15)
+[New Thread 0x7fffe49fd640 (LWP 121155)]
+[MLX5_INIT_THREAD] Thread created successfully
+[  0.005353] CPU 15| <5> thread: created thread 9 [tid: 121155]
+[KTHREAD INIT] Kthread 9 initialized (total kthreads=10, maxks=15)
+[New Thread 0x7fffcf7ff640 (LWP 121156)]
+[MLX5_INIT_THREAD] Called for kthread 3
+[MLX5_INIT_THREAD] Creating strided softirq thread
+[MLX5_INIT_THREAD] Thread created successfully
+[  0.005808] CPU 12| <5> thread: created thread 10 [tid: 121156]
+[KTHREAD INIT] Kthread 10 initialized (total kthreads=11, maxks=15)
+[New Thread 0x7fffccdfe640 (LWP 121157)]
+[  0.006237] CPU 07| <5> thread: created thread 11 [tid: 121157]
+[New Thread 0x7fffc77ff640 (LWP 121158)]
+[MLX5_INIT_THREAD] Called for kthread 7
+[MLX5_INIT_THREAD] Creating strided softirq thread
+[KTHREAD INIT] Kthread 11 initialized (total kthreads=12, maxks=15)
+[MLX5_INIT_THREAD] Called for kthread 9
+[MLX5_INIT_THREAD] Creating strided softirq thread
+[MLX5_INIT_THREAD] Thread created successfully
+[MLX5_INIT_THREAD] Thread created successfully
+[MLX5_INIT_THREAD] Called for kthread 8
+[MLX5_INIT_THREAD] Creating strided softirq thread
+[MLX5_INIT_THREAD] Thread created successfully
+[  0.006481] CPU 13| <5> thread: created thread 12 [tid: 121158]
+[New Thread 0x7fffc617e640 (LWP 121159)]
+[MLX5_INIT_THREAD] Called for kthread 6
+[MLX5_INIT_THREAD] Creating strided softirq thread
+[MLX5_INIT_THREAD] Thread created successfully
+[KTHREAD INIT] Kthread 12 initialized (total kthreads=13, maxks=15)
+[  0.006657] CPU 09| <5> thread: created thread 13 [tid: 121159]
+[New Thread 0x7fffc52fd640 (LWP 121160)]
+[KTHREAD INIT] Kthread 13 initialized (total kthreads=14, maxks=15)
+[  0.006894] CPU 14| <5> thread: created thread 14 [tid: 121160]
+[MLX5_INIT_THREAD] Called for kthread 10
+[MLX5_INIT_THREAD] Creating strided softirq thread
+[MLX5_INIT_THREAD] Thread created successfully
+[KTHREAD INIT] Kthread 14 initialized (total kthreads=15, maxks=15)
+[MLX5_INIT_THREAD] Called for kthread 12
+[MLX5_INIT_THREAD] Creating strided softirq thread
+[MLX5_INIT_THREAD] Thread created successfully
+[MLX5_INIT_THREAD] Called for kthread 11
+[MLX5_INIT_THREAD] Creating strided softirq thread
+[MLX5_INIT_THREAD] Thread created successfully
+[MLX5_INIT_THREAD] Called for kthread 13
+[MLX5_INIT_THREAD] Creating strided softirq thread
+[MLX5_INIT_THREAD] Thread created successfully
+[MLX5_INIT_THREAD] Called for kthread 14
+[MLX5_INIT_THREAD] Creating strided softirq thread
+[MLX5_INIT_THREAD] Thread created successfully
+[  0.041726] CPU 02| <5> flows_update: 1 kthreads awake out of 15
+[SCHEDULER] Kthread 0 entering schedule() for first time (runningks=1, spinks=15)
+
+=== Runtime Per-Kthread Stats at 512731212100 us [locked] ===
+  Max kthreads: 15
+
+  Per-Kthread Status:
+  KThr | State  | RX Packets | RX Bytes   | TX Packets | TX Bytes   | SW Drops | HW Drops
+  -----|--------|------------|------------|------------|------------|----------|----------
+     0 | ACTIVE |          0 |          0 |          0 |          0 |        0 |        0
+     1 | PARKED |          0 |          0 |          0 |          0 |        0 |        0
+     2 | PARKED |          0 |          0 |          0 |          0 |        0 |        0
+     3 | PARKED |          0 |          0 |          0 |          0 |        0 |        0
+     4 | PARKED |          0 |          0 |          0 |          0 |        0 |        0
+     5 | PARKED |          0 |          0 |          0 |          0 |        0 |        0
+     6 | PARKED |          0 |          0 |          0 |          0 |        0 |        0
+     7 | PARKED |          0 |          0 |          0 |          0 |        0 |        0
+     8 | PARKED |          0 |          0 |          0 |          0 |        0 |        0
+     9 | PARKED |          0 |          0 |          0 |          0 |        0 |        0
+    10 | PARKED |          0 |          0 |          0 |          0 |        0 |        0
+    11 | PARKED |          0 |          0 |          0 |          0 |        0 |        0
+    12 | PARKED |          0 |          0 |          0 |          0 |        0 |        0
+    13 | PARKED |          0 |          0 |          0 |          0 |        0 |        0
+    14 | PARKED |          0 |          0 |          0 |          0 |        0 |        0
+  -----|--------|------------|------------|------------|------------|----------|----------
+  TOTAL|        |          0 |          0 |          0 |          0 |        0 |        0
+
+running spawner server | addr=192.168.1.0:80
+Creating spawner 0 on port 80 with affinity 0
+192.168.1.0:80
+[  0.041859] CPU 02| <5> udp_create_spawner: port 80 -> affinity 0
+Creating spawner 1 on port 81 with affinity 1
+192.168.1.0:81
+[  0.041870] CPU 02| <5> udp_create_spawner: port 81 -> affinity 1
+Creating spawner 2 on port 82 with affinity 2
+192.168.1.0:82
+[  0.041880] CPU 02| <5> udp_create_spawner: port 82 -> affinity 2
+Creating spawner 3 on port 83 with affinity 3
+192.168.1.0:83
+[  0.041888] CPU 02| <5> udp_create_spawner: port 83 -> affinity 3
+Creating spawner 4 on port 84 with affinity 4
+192.168.1.0:84
+[  0.041897] CPU 02| <5> udp_create_spawner: port 84 -> affinity 4
+Creating spawner 5 on port 85 with affinity 5
+192.168.1.0:85
+[  0.041906] CPU 02| <5> udp_create_spawner: port 85 -> affinity 5
+Creating spawner 6 on port 86 with affinity 6
+192.168.1.0:86
+[  0.041915] CPU 02| <5> udp_create_spawner: port 86 -> affinity 6
+Creating spawner 7 on port 87 with affinity 7
+192.168.1.0:87
+[  0.041925] CPU 02| <5> udp_create_spawner: port 87 -> affinity 7
+Creating spawner 8 on port 88 with affinity 8
+192.168.1.0:88
+[  0.041933] CPU 02| <5> udp_create_spawner: port 88 -> affinity 8
+Creating spawner 9 on port 89 with affinity 9
+192.168.1.0:89
+[  0.041941] CPU 02| <5> udp_create_spawner: port 89 -> affinity 9
+Creating spawner 10 on port 90 with affinity 10
+192.168.1.0:90
+[  0.041950] CPU 02| <5> udp_create_spawner: port 90 -> affinity 10
+Creating spawner 11 on port 91 with affinity 11
+192.168.1.0:91
+[  0.041959] CPU 02| <5> udp_create_spawner: port 91 -> affinity 11
+Creating spawner 12 on port 92 with affinity 12
+192.168.1.0:92
+[  0.041967] CPU 02| <5> udp_create_spawner: port 92 -> affinity 12
+Creating spawner 13 on port 93 with affinity 13
+192.168.1.0:93
+[  0.041975] CPU 02| <5> udp_create_spawner: port 93 -> affinity 13
+Creating spawner 14 on port 94 with affinity 14
+192.168.1.0:94
+[  0.041985] CPU 02| <5> udp_create_spawner: port 94 -> affinity 14
+All 15 spawners created on ports 80-94

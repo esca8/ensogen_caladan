@@ -431,48 +431,51 @@ static int mlx5_init_root_table(void)
 
 	mask.size = DEVX_ST_SZ_BYTES(fte_match_param);
 	/* DIAG: only match on ip_protocol to test which field is broken */
-	// DEVX_SET(fte_match_param, mask.buf, outer_headers.ethertype, __devx_mask(16));
-	// DEVX_SET(fte_match_param, mask.buf, outer_headers.dst_ipv4_dst_ipv6.ipv4_layout.ipv4, __devx_mask(32));
+	DEVX_SET(fte_match_param, mask.buf, outer_headers.ethertype, __devx_mask(16));
+	DEVX_SET(fte_match_param, mask.buf, outer_headers.dst_ipv4_dst_ipv6.ipv4_layout.ipv4, __devx_mask(32));
 	DEVX_SET(fte_match_param, mask.buf, outer_headers.ip_version, __devx_mask(4));
-	// DEVX_SET(fte_match_param, mask.buf, outer_headers.ip_protocol, __devx_mask(8));
-	/* hex dump mask buffer - first 32 bytes (outer headers) */
-	{
-		uint8_t *p = (uint8_t *)mask.buf;
-		log_info("MASK match_sz=%zu", mask.size);
-		log_info("MASK[ 0..15]: %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x",
-			p[0],p[1],p[2],p[3],p[4],p[5],p[6],p[7],
-			p[8],p[9],p[10],p[11],p[12],p[13],p[14],p[15]);
-		log_info("MASK[16..31]: %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x",
-			p[16],p[17],p[18],p[19],p[20],p[21],p[22],p[23],
-			p[24],p[25],p[26],p[27],p[28],p[29],p[30],p[31]);
-	}
+	DEVX_SET(fte_match_param, mask.buf, outer_headers.ip_protocol, __devx_mask(8));
 	match_ip_and_tport = mlx5dv_dr_matcher_create(root_tbl, 0, DR_MATCHER_CRITERIA_OUTER, &mask.params);
 	if (!match_ip_and_tport)
 		return -errno;
 
 	log_info("\n--- ROOT TABLE RULE 1: TCP ---");
-	log_info("  Match: dst_ip=%u.%u.%u.%u, protocol=TCP",
+	log_info("  Match: dst_ip=%u.%u.%u.%u, protocol=TCP (0x%02x)",
 	         (netcfg.addr >> 24) & 0xFF,
 	         (netcfg.addr >> 16) & 0xFF,
 	         (netcfg.addr >> 8) & 0xFF,
-	         netcfg.addr & 0xFF);
+	         netcfg.addr & 0xFF,
+	         IPPROTO_TCP);
 	log_info("  Action: count + forward to tcp_tbl (level 1)");
 
-	/* DIAG: only set ip_protocol value */
- 	// DEVX_SET(fte_match_param, mask.buf, outer_headers.ethertype, ETHTYPE_IP);
-	DEVX_SET(fte_match_param, mask.buf, outer_headers.ip_version, IPVERSION);
-	// DEVX_SET(fte_match_param, mask.buf, outer_headers.dst_ipv4_dst_ipv6.ipv4_layout.ipv4, netcfg.addr);
-	// DEVX_SET(fte_match_param, mask.buf, outer_headers.ip_protocol, IPPROTO_TCP);
-	/* hex dump TCP value buffer */
+	/* Print the MASK first (before setting value) */
 	{
-		uint8_t *p = (uint8_t *)mask.buf;
-		log_info("TVAL match_sz=%zu", mask.size);
-		log_info("TVAL[ 0..15]: %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x",
-			p[0],p[1],p[2],p[3],p[4],p[5],p[6],p[7],
-			p[8],p[9],p[10],p[11],p[12],p[13],p[14],p[15]);
-		log_info("TVAL[16..31]: %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x %02x%02x%02x%02x",
-			p[16],p[17],p[18],p[19],p[20],p[21],p[22],p[23],
-			p[24],p[25],p[26],p[27],p[28],p[29],p[30],p[31]);
+		uint32_t *words = (uint32_t *)mask.buf;
+		log_info("MATCHER_MASK match_sz=%lu", mask.size);
+		log_info("MATCHER_MASK[ 0..15]: %08x %08x %08x %08x", words[0], words[1], words[2], words[3]);
+		log_info("MATCHER_MASK[16..31]: %08x %08x %08x %08x", words[4], words[5], words[6], words[7]);
+		uint8_t *bytes = (uint8_t *)mask.buf;
+		log_info("MATCHER_MASK bytes[16..31]: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
+			bytes[16], bytes[17], bytes[18], bytes[19], bytes[20], bytes[21], bytes[22], bytes[23],
+			bytes[24], bytes[25], bytes[26], bytes[27], bytes[28], bytes[29], bytes[30], bytes[31]);
+	}
+
+	/* DIAG: only set ip_protocol value */
+    DEVX_SET(fte_match_param, mask.buf, outer_headers.ethertype, ETHTYPE_IP);
+	DEVX_SET(fte_match_param, mask.buf, outer_headers.ip_version, IPVERSION);
+	DEVX_SET(fte_match_param, mask.buf, outer_headers.dst_ipv4_dst_ipv6.ipv4_layout.ipv4, netcfg.addr);
+	DEVX_SET(fte_match_param, mask.buf, outer_headers.ip_protocol, IPPROTO_TCP);
+
+	/* Debug: print TCP rule value */
+	{
+		uint32_t *words = (uint32_t *)mask.buf;
+		log_info("TCP_VAL match_sz=%lu", mask.size);
+		log_info("TCP_VAL[ 0..15]: %08x %08x %08x %08x", words[0], words[1], words[2], words[3]);
+		log_info("TCP_VAL[16..31]: %08x %08x %08x %08x", words[4], words[5], words[6], words[7]);
+		uint8_t *bytes = (uint8_t *)mask.buf;
+		log_info("TCP_VAL bytes[16..31]: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
+			bytes[16], bytes[17], bytes[18], bytes[19], bytes[20], bytes[21], bytes[22], bytes[23],
+			bytes[24], bytes[25], bytes[26], bytes[27], bytes[28], bytes[29], bytes[30], bytes[31]);
 	}
 	actions[0] = cnt_root_tcp.action;
 	actions[1] = tcp_tbl.ingress_action;
@@ -484,21 +487,36 @@ static int mlx5_init_root_table(void)
 	log_info("  Rule handle: %p, counter_id: %u - SUCCESS", root_tcp_rule, cnt_root_tcp.id);
 
 	log_info("\n--- ROOT TABLE RULE 2: UDP ---");
-	log_info("  Match: dst_ip=%u.%u.%u.%u, protocol=UDP",
+	log_info("  Match: dst_ip=%u.%u.%u.%u, protocol=UDP (0x%02x)",
 	         (netcfg.addr >> 24) & 0xFF,
 	         (netcfg.addr >> 16) & 0xFF,
 	         (netcfg.addr >> 8) & 0xFF,
-	         netcfg.addr & 0xFF);
+	         netcfg.addr & 0xFF,
+	         IPPROTO_UDP);
 	log_info("  Action: count + forward to udp_tbl (level 1)");
 
-	// DEVX_SET(fte_match_param, mask.buf, outer_headers.ip_protocol, IPPROTO_UDP);
+	DEVX_SET(fte_match_param, mask.buf, outer_headers.ip_protocol, IPPROTO_UDP);
+
+	/* Debug: print UDP rule value */
+	{
+		uint32_t *words = (uint32_t *)mask.buf;
+		log_info("UDP_VAL match_sz=%lu", mask.size);
+		log_info("UDP_VAL[ 0..15]: %08x %08x %08x %08x", words[0], words[1], words[2], words[3]);
+		log_info("UDP_VAL[16..31]: %08x %08x %08x %08x", words[4], words[5], words[6], words[7]);
+		log_info("UDP_VAL[32..47]: %08x %08x %08x %08x", words[8], words[9], words[10], words[11]);
+		/* Also check raw bytes around ip_protocol location */
+		uint8_t *bytes = (uint8_t *)mask.buf;
+		log_info("UDP_VAL bytes[16..31]: %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x %02x",
+			bytes[16], bytes[17], bytes[18], bytes[19], bytes[20], bytes[21], bytes[22], bytes[23],
+			bytes[24], bytes[25], bytes[26], bytes[27], bytes[28], bytes[29], bytes[30], bytes[31]);
+	}
 	actions[0] = cnt_root_udp.action;
 	actions[1] = udp_tbl.ingress_action;
-	// root_udp_rule = mlx5dv_dr_rule_create(match_ip_and_tport, &mask.params, 2, actions);
-	// if (!root_udp_rule) {
-	//	log_err("FAILED to create root UDP rule, errno=%d (%s)", errno, strerror(errno));
-	//	return -errno;
-	//}
+	root_udp_rule = mlx5dv_dr_rule_create(match_ip_and_tport, &mask.params, 2, actions);
+	if (!root_udp_rule) {
+		log_err("FAILED to create root UDP rule, errno=%d (%s)", errno, strerror(errno));
+		return -errno;
+	}
 	log_info("  Rule handle: %p, counter_id: %u - SUCCESS", root_udp_rule, cnt_root_udp.id);
 
 	log_info("\n=== ROOT TABLE INITIALIZATION COMPLETE ===\n");
@@ -818,6 +836,22 @@ int mlx5_init_flow_steering(void)
 	log_info("========================================\n");
 
 	RT_FS_DBG("=== mlx5_init_flow_steering: COMPLETE ===");
+
+	/* Dump DR domain steering rules to file */
+	{
+		FILE *f = fopen("/tmp/dr_dump.csv", "w");
+		if (f) {
+			ret = mlx5dv_dump_dr_domain(f, dmn);
+			fclose(f);
+			if (ret)
+				log_warn("DR domain dump failed: ret=%d errno=%d", ret, errno);
+			else
+				log_info("DR domain dumped to /tmp/dr_dump.csv");
+		} else {
+			log_warn("Failed to open /tmp/dr_dump.csv: %s", strerror(errno));
+		}
+	}
+
 	return 0;
 }
 
@@ -845,7 +879,7 @@ void mlx5_print_flow_counters(void)
 	if (ret == 0)
 		log_info("  UDP:  %lu packets, %lu bytes", packets, bytes);
 	else
-		log_info("  UDP:  query failed (ret=%d)", ret);
+		log_info("  UDP:  query failed (ret=%d)!!!", ret);
 
 	/* DIAGNOSTIC: catch-all counter */
 	ret = query_flow_counter(&cnt_catchall, &packets, &bytes);

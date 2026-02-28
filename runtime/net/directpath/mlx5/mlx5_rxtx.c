@@ -341,6 +341,10 @@ int mlx5_gather_rx(struct mlx5_rxq *v, struct mbuf **ms, unsigned int budget)
 	struct mlx5_cqe64 *cqe;
 	struct mbuf *m;
 
+	static uint64_t gather_rx_calls = 0;
+	if (++gather_rx_calls % 1000000 == 0)
+		log_info("mlx5_gather_rx called %lu times, budget=%u", gather_rx_calls, budget);
+
 	for (rx_cnt = 0; rx_cnt < budget; rx_cnt++) {
 		cqe = &v->cq.cqes[v->cq.head & (v->cq.cnt - 1)];
 		opcode = cqe_status(cqe, v->cq.cnt, v->cq.head);
@@ -371,7 +375,7 @@ int mlx5_gather_rx(struct mlx5_rxq *v, struct mbuf **ms, unsigned int budget)
 		m = v->wq.buffers[wqe_idx];
 		m = mbuf_fill_cqe(m, cqe);
 
-				// Debug: print packet header and raw bytes
+		// Debug: print packet header and raw bytes
 		{
 			uint8_t *pkt = mbuf_data(m);
 			// Ethernet header is 14 bytes, IP header starts at offset 14
@@ -401,6 +405,7 @@ int mlx5_gather_rx(struct mlx5_rxq *v, struct mbuf **ms, unsigned int budget)
 			if (pos > 0)
 				log_info("DIRECTPATH_RX RAW[%02d]: %s", (dump_len - 1) / 16 * 16, hexbuf);
 		}
+
 		ms[rx_cnt] = m;
 	}
 

@@ -48,7 +48,7 @@ fn socket_worker(socket: &mut Connection, worker: Arc<FakeWorker>) {
         let mut payload = Payload::deserialize(&mut &v[..PAYLOAD_SIZE])?;
         v.clear();
         // worker.work(payload.work_iterations, payload.randomness);
-        worker.work(0, 0);
+        worker.work(payload.work_iterations, 0);
         // payload.randomness = shenango::rdtsc();
         payload.serialize_into(&mut v)?;
         Ok(socket.write_all(&v[..])?)
