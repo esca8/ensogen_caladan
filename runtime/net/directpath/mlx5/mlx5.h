@@ -10,6 +10,13 @@
 
 #include "../defs.h"
 
+/* Verbose runtime prints (DIRECTPATH_RX, steer_flows, register_flow, etc.)
+ * Set to 0 to suppress noisy per-packet/per-event logs while keeping
+ * init messages and periodic counter/stats output. */
+#ifndef RT_FS_VERBOSE
+#define RT_FS_VERBOSE 1
+#endif
+
 #define PORT_NUM 1 // TODO: make this dynamic
 #define MLX5_ETH_L2_INLINE_HEADER_SIZE 18
 #define MLX5_BF_SIZE 256

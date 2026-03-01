@@ -97,9 +97,9 @@ pub fn run_spawner_server(addr: SocketAddrV4, workerspec: &str) {
             let mut payload = Payload::deserialize(&mut &buf[..]).unwrap();
             #[allow(static_mut_refs)]
             let worker = SPAWNER_WORKER.as_ref().unwrap();
-            // println!("Work iter: {}", payload.work_iterations);
-            worker.work(0, 0); 
-            // worker.work(payload.work_iterations, 0);
+            println!("Work iter: {}", payload.work_iterations);
+            // worker.work(0, 0); 
+            worker.work(payload.work_iterations, 0);
             let mut array = ArrayVec::<_, PAYLOAD_SIZE>::new();
             payload.serialize_into(&mut array).unwrap();
             let _ = UdpSpawner::reply(d, array.as_slice()); // TODO: why is d's ip addr 0.0.0.1 inside reply()
@@ -113,3 +113,4 @@ pub fn run_spawner_server(addr: SocketAddrV4, workerspec: &str) {
     wg.add(1);
     wg.wait();
 }
+

@@ -20,6 +20,7 @@
 #define RT_FS_DEBUG 1
 #endif
 
+
 #if RT_FS_DEBUG
 #define RT_FS_DBG(fmt, ...) log_info("[RT_FS_DBG] " fmt, ##__VA_ARGS__)
 #else
@@ -601,6 +602,7 @@ static int mlx5_register_flow(unsigned int affinity, struct trans_entry *e, void
 
 	/* Route directly to the flow group for the specified affinity,
 	 * bypassing source port hashing */
+#if RT_FS_VERBOSE
 	log_info("=== INSTALLING FLOW RULE ===");
 	log_info("  Protocol: %s", proto_str);
 	log_info("  Dst Port: %u", e->laddr.port);
@@ -608,6 +610,7 @@ static int mlx5_register_flow(unsigned int affinity, struct trans_entry *e, void
 	log_info("  QP assignment: %u", last_level_fgs[affinity].qp_assignment);
 	log_info("  Action: forward to last_level_fgs[%u] table -> rx_qps[%u]",
 	         affinity, last_level_fgs[affinity].qp_assignment);
+#endif
 
 	action[0] = last_level_fgs[affinity].tbl.ingress_action;
 
@@ -623,15 +626,19 @@ static int mlx5_register_flow(unsigned int affinity, struct trans_entry *e, void
 		return -errno;
 	}
 
+#if RT_FS_VERBOSE
 	log_info("  Rule handle: %p - SUCCESS", rule);
 	log_info("============================");
+#endif
 
 	*handle_out = rule;
 
     /* Sync new rule to hardware */
 	mlx5dv_dr_domain_sync(dmn, MLX5DV_DR_DOMAIN_SYNC_FLAGS_SW);
 	mlx5dv_dr_domain_sync(dmn, MLX5DV_DR_DOMAIN_SYNC_FLAGS_HW);
+#if RT_FS_VERBOSE
 	log_info("  Domain sync completed after register_flow");
+#endif
 
 	return 0;
 }
@@ -660,7 +667,9 @@ static int mlx5_steer_flows(unsigned int *new_fg_assignment)
 	struct ibv_qp *new_qp, *old_qp;
 	struct last_level_fg *fg;
 
+#if RT_FS_VERBOSE
 	log_info("mlx5_steer_flows: Redistributing flow groups across kthreads");
+#endif
 	postsend_lock(dmn);
 
 	for (i = 0; i < maxks; i++) {
@@ -669,7 +678,9 @@ static int mlx5_steer_flows(unsigned int *new_fg_assignment)
 		if (new_fg_assignment[i] == fg->qp_assignment)
 			continue;
 
+#if RT_FS_VERBOSE
 		log_info("  FG %d: reassigning from kthread %d -> %d", i, fg->qp_assignment, new_fg_assignment[i]);
+#endif
 		new_qp = rx_qps[new_fg_assignment[i]];
 		old_qp = rx_qps[fg->qp_assignment];
 

@@ -375,6 +375,7 @@ int mlx5_gather_rx(struct mlx5_rxq *v, struct mbuf **ms, unsigned int budget)
 		m = v->wq.buffers[wqe_idx];
 		m = mbuf_fill_cqe(m, cqe);
 
+#if RT_FS_VERBOSE
 		// Debug: print packet header and raw bytes
 		{
 			uint8_t *pkt = mbuf_data(m);
@@ -405,6 +406,7 @@ int mlx5_gather_rx(struct mlx5_rxq *v, struct mbuf **ms, unsigned int budget)
 			if (pos > 0)
 				log_info("DIRECTPATH_RX RAW[%02d]: %s", (dump_len - 1) / 16 * 16, hexbuf);
 		}
+#endif
 
 		ms[rx_cnt] = m;
 	}
