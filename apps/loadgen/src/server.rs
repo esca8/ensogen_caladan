@@ -28,7 +28,7 @@ pub fn run_linux_udp_server(config: AppConfig) {
                 loop {
                     let (len, remote_addr) = socket.recv_from(&mut buf[..]).unwrap();
                     let payload = Payload::deserialize(&mut &buf[..len]).unwrap();
-                    worker.work(payload.work_iterations, payload.randomness);
+                    worker.work(payload.work_iterations, shenango::rdtsc());
                     socket.send_to(&buf[..len], remote_addr).unwrap();
                 }
             })
@@ -41,12 +41,13 @@ pub fn run_linux_udp_server(config: AppConfig) {
 }
 
 fn socket_worker(socket: &mut Connection, worker: Arc<FakeWorker>) {
+    // Note: socket_worker is not on UDP path (TCP only)
     let mut v = vec![0; PAYLOAD_SIZE];
     let mut r = || {
         socket.read_exact(&mut v[..PAYLOAD_SIZE])?;
         let mut payload = Payload::deserialize(&mut &v[..PAYLOAD_SIZE])?;
         v.clear();
-        worker.work(payload.work_iterations, payload.randomness);
+        worker.work(payload.work_iterations, shenango::rdtsc());
         payload.randomness = shenango::rdtsc();
         payload.serialize_into(&mut v)?;
         Ok(socket.write_all(&v[..])?)
@@ -95,7 +96,7 @@ pub fn run_spawner_server(addr: SocketAddrV4, workerspec: &str) {
             let mut payload = Payload::deserialize(&mut &buf[..]).unwrap();
             #[allow(static_mut_refs)]
             let worker = SPAWNER_WORKER.as_ref().unwrap();
-            worker.work(payload.work_iterations, payload.randomness);
+            worker.work(payload.work_iterations, shenango::rdtsc());
             payload.randomness = shenango::rdtsc();
             let mut array = ArrayVec::<_, PAYLOAD_SIZE>::new();
             payload.serialize_into(&mut array).unwrap();
