@@ -142,7 +142,7 @@ static void rx_one_pkt(struct rte_mbuf *buf)
 		}
 	}
 
-	log_debug("rx: rx packet with MAC %02" PRIx8 " %02" PRIx8 " %02"
+	log_warn("rx: rx packet with MAC %02" PRIx8 " %02" PRIx8 " %02"
 		  PRIx8 " %02" PRIx8 " %02" PRIx8 " %02" PRIx8,
 		  ptr_dst_addr->addr_bytes[0], ptr_dst_addr->addr_bytes[1],
 		  ptr_dst_addr->addr_bytes[2], ptr_dst_addr->addr_bytes[3],
