@@ -602,7 +602,7 @@ static int mlx5_register_flow(unsigned int affinity, struct trans_entry *e, void
 
 	/* Route directly to the flow group for the specified affinity,
 	 * bypassing source port hashing */
-#if RT_FS_VERBOSE
+#if RT_FS_VERBOSE >= 2
 	log_info("=== INSTALLING FLOW RULE ===");
 	log_info("  Protocol: %s", proto_str);
 	log_info("  Dst Port: %u", e->laddr.port);
@@ -626,7 +626,7 @@ static int mlx5_register_flow(unsigned int affinity, struct trans_entry *e, void
 		return -errno;
 	}
 
-#if RT_FS_VERBOSE
+#if RT_FS_VERBOSE >= 2
 	log_info("  Rule handle: %p - SUCCESS", rule);
 	log_info("============================");
 #endif
@@ -636,7 +636,7 @@ static int mlx5_register_flow(unsigned int affinity, struct trans_entry *e, void
     /* Sync new rule to hardware */
 	mlx5dv_dr_domain_sync(dmn, MLX5DV_DR_DOMAIN_SYNC_FLAGS_SW);
 	mlx5dv_dr_domain_sync(dmn, MLX5DV_DR_DOMAIN_SYNC_FLAGS_HW);
-#if RT_FS_VERBOSE
+#if RT_FS_VERBOSE >= 2
 	log_info("  Domain sync completed after register_flow");
 #endif
 
@@ -667,7 +667,7 @@ static int mlx5_steer_flows(unsigned int *new_fg_assignment)
 	struct ibv_qp *new_qp, *old_qp;
 	struct last_level_fg *fg;
 
-#if RT_FS_VERBOSE
+#if RT_FS_VERBOSE >= 2
 	log_info("mlx5_steer_flows: Redistributing flow groups across kthreads");
 #endif
 	postsend_lock(dmn);
@@ -678,7 +678,7 @@ static int mlx5_steer_flows(unsigned int *new_fg_assignment)
 		if (new_fg_assignment[i] == fg->qp_assignment)
 			continue;
 
-#if RT_FS_VERBOSE
+#if RT_FS_VERBOSE >= 2
 		log_info("  FG %d: reassigning from kthread %d -> %d", i, fg->qp_assignment, new_fg_assignment[i]);
 #endif
 		new_qp = rx_qps[new_fg_assignment[i]];
@@ -871,6 +871,7 @@ int mlx5_init_flow_steering(void)
  */
 void mlx5_print_flow_counters(void)
 {
+#if RT_FS_VERBOSE >= 1
 	uint64_t packets, bytes;
 	int i, ret;
 
@@ -911,6 +912,7 @@ void mlx5_print_flow_counters(void)
 	}
 
 	log_info("========================================\n");
+#endif /* RT_FS_VERBOSE >= 1 */
 }
 
 /*

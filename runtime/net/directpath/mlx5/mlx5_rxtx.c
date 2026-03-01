@@ -375,7 +375,7 @@ int mlx5_gather_rx(struct mlx5_rxq *v, struct mbuf **ms, unsigned int budget)
 		m = v->wq.buffers[wqe_idx];
 		m = mbuf_fill_cqe(m, cqe);
 
-#if RT_FS_VERBOSE
+#if RT_FS_VERBOSE >= 2
 		// Debug: print packet header and raw bytes
 		{
 			uint8_t *pkt = mbuf_data(m);

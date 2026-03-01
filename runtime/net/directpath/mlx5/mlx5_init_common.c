@@ -76,6 +76,7 @@ static void mlx5_softirq(void *arg)
 
 void mlx5_print_kthread_stats(char *caller)
 {
+#if RT_FS_VERBOSE >= 1
 	uint64_t now_tsc = rdtsc();
 	uint64_t total_rx_packets = 0, total_rx_bytes = 0;
 	uint64_t total_tx_packets = 0, total_tx_bytes = 0;
@@ -122,7 +123,7 @@ void mlx5_print_kthread_stats(char *caller)
 	        total_rx_packets, total_rx_bytes, total_tx_packets, total_tx_bytes, total_drops, total_hw_drops);
 	fprintf(stderr, "\n");
 	fflush(stderr);
-
+#endif /* RT_FS_VERBOSE >= 1 */
 }
 
 bool mlx5_rx_poll(unsigned int q_index)
