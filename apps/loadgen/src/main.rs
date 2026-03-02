@@ -296,6 +296,7 @@ pub struct AppConfig {
     pub calibrate: Option<u64>,
     pub world_size: usize,
     pub rank: usize,
+    pub num_spawners: usize,
 }
 
 impl AppConfig {
@@ -1575,6 +1576,10 @@ impl AppConfig {
 
         let distribution = Self::create_distribution(matches)?;
         let protocol = Self::create_protocol(matches, transport, &distribution)?;
+        let num_spawners = matches
+            .get_one::<usize>("num_spawners")
+            .copied()
+            .unwrap_or(15);
 
         Ok(AppConfig {
             addrs,
@@ -1602,6 +1607,7 @@ impl AppConfig {
             calibrate,
             world_size,
             rank: 0,
+            num_spawners,
         })
     }
 
@@ -2023,6 +2029,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .action(clap::ArgAction::SetTrue)
                 .help("run runtime stat"),
         )
+        .arg(
+            Arg::new("num_spawners")
+                .long("num-spawners")
+                .num_args(1)
+                .value_parser(clap::value_parser!(usize))
+                .default_value("1")
+                .help("Number of UDP spawner servers to create"),
+        )
         .args(&SyntheticProtocol::args())
         .args(&MemcachedProtocol::args())
         .args(&DnsProtocol::args())
@@ -2080,7 +2094,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .backend
                 .clone()
                 .init_and_run(cfg_file.as_deref(), move || {
-                    server::run_spawner_server(config.addrs[0], &config.fakework_spec)
+                    server::run_spawner_server(config.addrs[0], &config.fakework_spec, config.num_spawners)
                 }),
             Transport::Tcp => config
                 .backend

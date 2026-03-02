@@ -85,7 +85,8 @@ pub fn run_tcp_server(config: AppConfig) {
     }
 }
 
-pub fn run_spawner_server(addr: SocketAddrV4, workerspec: &str) {
+pub fn run_spawner_server(addr: SocketAddrV4, workerspec: &str, num_spawners: usize) {
+    println!("running spawner server | addr={} num_spawners={}", addr, num_spawners);
     static mut SPAWNER_WORKER: Option<FakeWorker> = None;
     unsafe {
         SPAWNER_WORKER = Some(FakeWorker::create(workerspec).unwrap());
@@ -96,7 +97,7 @@ pub fn run_spawner_server(addr: SocketAddrV4, workerspec: &str) {
             let mut payload = Payload::deserialize(&mut &buf[..]).unwrap();
             #[allow(static_mut_refs)]
             let worker = SPAWNER_WORKER.as_ref().unwrap();
-            worker.work(payload.work_iterations, shenango::rdtsc());
+            worker.work(payload.work_iterations, 0);
             payload.randomness = shenango::rdtsc();
             let mut array = ArrayVec::<_, PAYLOAD_SIZE>::new();
             payload.serialize_into(&mut array).unwrap();
@@ -105,7 +106,19 @@ pub fn run_spawner_server(addr: SocketAddrV4, workerspec: &str) {
         }
     }
 
-    let _s = unsafe { UdpSpawner::new(addr, echo).unwrap() };
+    let mut spawners = Vec::new();
+    let base_port = addr.port();
+    let ip = addr.ip();
+
+    for i in 0..num_spawners {
+        let port = base_port + i as u16;
+        let spawner_addr = SocketAddrV4::new(*ip, port);
+        println!("Creating spawner {} on port {}", i, port);
+        let s = unsafe { UdpSpawner::new(spawner_addr, echo).unwrap() };
+        spawners.push(s);
+    }
+
+    println!("All {} spawners created on ports {}-{}", num_spawners, base_port, base_port + (num_spawners as u16 - 1));
 
     let wg = shenango::WaitGroup::new();
     wg.add(1);
