@@ -365,7 +365,7 @@ int mlx5_gather_rx(struct mlx5_rxq *v, struct mbuf **ms, unsigned int budget)
 	if (unlikely(!rx_cnt))
 		return 0;
 
-    log_warn_ratelimited("mlx5_gather_rx: %d", rx_cnt); // TODO: delete when running experiment
+    // log_warn_ratelimited("mlx5_gather_rx: %d", rx_cnt); // TODO: delete when running experiment
 	ACCESS_ONCE(*v->shadow_tail) = v->cq.head;
 
 	v->cq.dbr[0] = htobe32(v->cq.head & 0xffffff);
