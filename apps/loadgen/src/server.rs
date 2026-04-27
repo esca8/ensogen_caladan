@@ -13,7 +13,9 @@ use crate::KBUFSIZE;
 use crate::PAYLOAD_SIZE;
 
 use std::io;
-use std::sync::atomic::{AtomicU64, Ordering::Relaxed}; 
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering::Relaxed};
+
+static SERVER_STATS_ENABLED: AtomicBool = AtomicBool::new(false);
 
 pub fn run_linux_udp_server(config: AppConfig) {
     let worker = config.fakeworker();
@@ -86,8 +88,9 @@ pub fn run_tcp_server(config: AppConfig) {
     }
 }
 
-pub fn run_spawner_server(addr: SocketAddrV4, workerspec: &str, num_spawners: usize) {
-    println!("running spawner server | addr={} num_spawners={}", addr, num_spawners);
+pub fn run_spawner_server(addr: SocketAddrV4, workerspec: &str, num_spawners: usize, server_stats: bool) {
+    println!("running spawner server | addr={} num_spawners={} server_stats={}", addr, num_spawners, server_stats);
+    SERVER_STATS_ENABLED.store(server_stats, Relaxed);
     static mut SPAWNER_WORKER: Option<FakeWorker> = None;
     static WORK_COUNT: AtomicU64 = AtomicU64::new(0);
     static WORK_TOTAL_CYCLES: AtomicU64 = AtomicU64::new(0);
@@ -102,18 +105,22 @@ pub fn run_spawner_server(addr: SocketAddrV4, workerspec: &str, num_spawners: us
             let mut payload = Payload::deserialize(&mut &buf[..]).unwrap();
             #[allow(static_mut_refs)]
             let worker = SPAWNER_WORKER.as_ref().unwrap();
-            let start = shenango::rdtsc();
-            worker.work(payload.work_iterations, payload.randomness);
-            let elapsed = shenango::rdtsc() - start;
-            WORK_TOTAL_CYCLES.fetch_add(elapsed, Relaxed);
-            WORK_MIN_CYCLES.fetch_min(elapsed, Relaxed);
-            WORK_MAX_CYCLES.fetch_max(elapsed, Relaxed);
-            let count = WORK_COUNT.fetch_add(1, Relaxed) + 1;
-            if count % 100000 == 0 {
-                println!("work stats: count={} mean={} min={} max={} last={} last_iters={}, rand={}",
-                    count, WORK_TOTAL_CYCLES.load(Relaxed) / count,
-                    WORK_MIN_CYCLES.load(Relaxed), WORK_MAX_CYCLES.load(Relaxed),
-                    elapsed, payload.work_iterations, payload.randomness);
+            if SERVER_STATS_ENABLED.load(Relaxed) {
+                let start = shenango::rdtsc();
+                worker.work(payload.work_iterations, payload.randomness);
+                let elapsed = shenango::rdtsc() - start;
+                WORK_TOTAL_CYCLES.fetch_add(elapsed, Relaxed);
+                WORK_MIN_CYCLES.fetch_min(elapsed, Relaxed);
+                WORK_MAX_CYCLES.fetch_max(elapsed, Relaxed);
+                let count = WORK_COUNT.fetch_add(1, Relaxed) + 1;
+                if count % 100000 == 0 {
+                    println!("work stats: count={} mean={} min={} max={} last={} last_iters={}, rand={}",
+                        count, WORK_TOTAL_CYCLES.load(Relaxed) / count,
+                        WORK_MIN_CYCLES.load(Relaxed), WORK_MAX_CYCLES.load(Relaxed),
+                        elapsed, payload.work_iterations, payload.randomness);
+                }
+            } else {
+                worker.work(payload.work_iterations, payload.randomness);
             }
             let mut array = ArrayVec::<_, PAYLOAD_SIZE>::new();
             payload.serialize_into(&mut array).unwrap();

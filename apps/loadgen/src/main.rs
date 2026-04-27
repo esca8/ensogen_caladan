@@ -297,6 +297,7 @@ pub struct AppConfig {
     pub world_size: usize,
     pub rank: usize,
     pub num_spawners: usize,
+    pub server_stats: bool,
 }
 
 impl AppConfig {
@@ -1580,6 +1581,7 @@ impl AppConfig {
             .get_one::<usize>("num_spawners")
             .copied()
             .unwrap_or(15);
+        let server_stats = *matches.get_one::<bool>("server_stats").unwrap_or(&false);
 
         Ok(AppConfig {
             addrs,
@@ -1608,6 +1610,7 @@ impl AppConfig {
             world_size,
             rank: 0,
             num_spawners,
+            server_stats,
         })
     }
 
@@ -2037,6 +2040,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .default_value("1")
                 .help("Number of UDP spawner servers to create"),
         )
+        .arg(
+            Arg::new("server_stats")
+                .long("server-stats")
+                .action(clap::ArgAction::SetTrue)
+                .help("Enable per-request timing stats on the spawner server"),
+        )
         .args(&SyntheticProtocol::args())
         .args(&MemcachedProtocol::args())
         .args(&DnsProtocol::args())
@@ -2094,7 +2103,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .backend
                 .clone()
                 .init_and_run(cfg_file.as_deref(), move || {
-                    server::run_spawner_server(config.addrs[0], &config.fakework_spec, config.num_spawners)
+                    server::run_spawner_server(config.addrs[0], &config.fakework_spec, config.num_spawners, config.server_stats)
                 }),
             Transport::Tcp => config
                 .backend
