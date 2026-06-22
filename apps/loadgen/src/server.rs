@@ -88,9 +88,21 @@ pub fn run_tcp_server(config: AppConfig) {
     }
 }
 
-pub fn run_spawner_server(addr: SocketAddrV4, workerspec: &str, num_spawners: usize, server_stats: bool) {
-    println!("running spawner server | addr={} num_spawners={} server_stats={}", addr, num_spawners, server_stats);
+pub fn run_spawner_server(
+    addr: SocketAddrV4,
+    workerspec: &str,
+    num_spawners: usize,
+    server_stats: bool,
+    log_runtime_stats: bool,
+    log_runtime_bursts: bool,
+) {
+    println!(
+        "running spawner server | addr={} num_spawners={} server_stats={} log_runtime_stats={} log_runtime_bursts={}",
+        addr, num_spawners, server_stats, log_runtime_stats, log_runtime_bursts
+    );
     SERVER_STATS_ENABLED.store(server_stats, Relaxed);
+    unsafe { shenango::ffi::runtime_set_log_runtime_stats(log_runtime_stats); }
+    unsafe { shenango::ffi::runtime_set_log_runtime_bursts(log_runtime_bursts); }
     static mut SPAWNER_WORKER: Option<FakeWorker> = None;
     static WORK_COUNT: AtomicU64 = AtomicU64::new(0);
     static WORK_TOTAL_CYCLES: AtomicU64 = AtomicU64::new(0);

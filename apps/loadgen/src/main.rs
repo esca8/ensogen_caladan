@@ -298,6 +298,8 @@ pub struct AppConfig {
     pub rank: usize,
     pub num_spawners: usize,
     pub server_stats: bool,
+    pub log_runtime_stats: bool,
+    pub log_runtime_bursts: bool,
 }
 
 impl AppConfig {
@@ -1582,6 +1584,10 @@ impl AppConfig {
             .copied()
             .unwrap_or(15);
         let server_stats = *matches.get_one::<bool>("server_stats").unwrap_or(&false);
+        let log_runtime_stats =
+            *matches.get_one::<bool>("log_runtime_stats").unwrap_or(&false);
+        let log_runtime_bursts =
+            *matches.get_one::<bool>("log_runtime_bursts").unwrap_or(&false);
 
         Ok(AppConfig {
             addrs,
@@ -1611,6 +1617,8 @@ impl AppConfig {
             rank: 0,
             num_spawners,
             server_stats,
+            log_runtime_stats,
+            log_runtime_bursts,
         })
     }
 
@@ -2046,6 +2054,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .action(clap::ArgAction::SetTrue)
                 .help("Enable per-request timing stats on the spawner server"),
         )
+        .arg(
+            Arg::new("log_runtime_stats")
+                .long("log-runtime-stats")
+                .action(clap::ArgAction::SetTrue)
+                .help("Emit periodic `runtime_stats k=N ...` lines to stdout"),
+        )
+        .arg(
+            Arg::new("log_runtime_bursts")
+                .long("log-runtime-bursts")
+                .action(clap::ArgAction::SetTrue)
+                .help("Emit per-kthread `rx_bursts` histogram lines on RX"),
+        )
         .args(&SyntheticProtocol::args())
         .args(&MemcachedProtocol::args())
         .args(&DnsProtocol::args())
@@ -2103,7 +2123,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .backend
                 .clone()
                 .init_and_run(cfg_file.as_deref(), move || {
-                    server::run_spawner_server(config.addrs[0], &config.fakework_spec, config.num_spawners, config.server_stats)
+                    server::run_spawner_server(
+                        config.addrs[0],
+                        &config.fakework_spec,
+                        config.num_spawners,
+                        config.server_stats,
+                        config.log_runtime_stats,
+                        config.log_runtime_bursts,
+                    )
                 }),
             Transport::Tcp => config
                 .backend

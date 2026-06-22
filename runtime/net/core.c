@@ -314,6 +314,73 @@ drop:
 	mbuf_drop(m);
 }
 
+/* --- BEGIN RX burst instrumentation (diagnostic only) --- */
+
+#define RX_BURST_HIST_BUCKETS         6
+#define RX_BURST_DUMP_INTERVAL_CYCLES (3ULL * 1000 * 1000 * 1000)  /* ~1s @ 3GHz */
+
+static __thread uint64_t rx_burst_hist[RX_BURST_HIST_BUCKETS];
+static __thread uint64_t rx_burst_total_pkts;
+static __thread uint64_t rx_burst_nonempty_calls;
+static __thread uint64_t rx_burst_max;
+static __thread uint64_t rx_burst_hist_last_tsc;
+
+/* Off by default. Apps enable via runtime_set_log_runtime_bursts(true)
+ * (declared in inc/runtime/runtime.h, exposed to Rust via the shenango
+ * bindings). When disabled, the per-batch hook is a single load+compare. */
+static bool log_runtime_bursts_enabled = false;
+
+void runtime_set_log_runtime_bursts(bool enabled)
+{
+	log_runtime_bursts_enabled = enabled;
+}
+
+static inline int rx_burst_bucket(unsigned int n)
+{
+	/* Buckets: [1], [2], [3-4], [5-8], [9-16], [17-32] */
+	if (n <= 1)  return 0;
+	if (n <= 2)  return 1;
+	if (n <= 4)  return 2;
+	if (n <= 8)  return 3;
+	if (n <= 16) return 4;
+	return 5;
+}
+
+static inline void rx_burst_record_and_maybe_dump(unsigned int cnt)
+{
+	uint64_t now;
+
+	if (!ACCESS_ONCE(log_runtime_bursts_enabled))
+		return;
+
+	if (cnt == 0)
+		return;
+
+	rx_burst_hist[rx_burst_bucket(cnt)]++;
+	rx_burst_total_pkts += cnt;
+	rx_burst_nonempty_calls++;
+	if ((uint64_t)cnt > rx_burst_max)
+		rx_burst_max = cnt;
+
+	now = rdtsc();
+	if (now - rx_burst_hist_last_tsc < RX_BURST_DUMP_INTERVAL_CYCLES)
+		return;
+
+	log_info("rx_bursts: calls=%lu pkts=%lu max=%lu "
+	         "hist[1,2,3-4,5-8,9-16,17-32]=%lu,%lu,%lu,%lu,%lu,%lu",
+	         rx_burst_nonempty_calls, rx_burst_total_pkts, rx_burst_max,
+	         rx_burst_hist[0], rx_burst_hist[1], rx_burst_hist[2],
+	         rx_burst_hist[3], rx_burst_hist[4], rx_burst_hist[5]);
+
+	memset(rx_burst_hist, 0, sizeof(rx_burst_hist));
+	rx_burst_total_pkts = 0;
+	rx_burst_nonempty_calls = 0;
+	rx_burst_max = 0;
+	rx_burst_hist_last_tsc = now;
+}
+
+/* --- END RX burst instrumentation --- */
+
 /**
  * net_rx_batch - handles a batch of ingress packets
  * @ms: an array of ingress packets
@@ -328,6 +395,8 @@ void net_rx_batch(struct mbuf **ms, unsigned int nr)
 			prefetch(ms[i + RX_PREFETCH_STRIDE]->data);
 		net_rx_one(ms[i]);
 	}
+
+	rx_burst_record_and_maybe_dump(nr);
 }
 
 static void handle_tx_completion(unsigned long payload)

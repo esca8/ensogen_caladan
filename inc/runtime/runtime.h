@@ -17,6 +17,14 @@ extern int runtime_set_initializers(initializer_fn_t global_fn,
 				    initializer_fn_t late_fn);
 extern int runtime_init(const char *cfgpath, thread_fn_t main_fn, void *arg);
 
+/* Enable/disable periodic emission of per-kthread `runtime_stats` log lines.
+ * Off by default; apps can enable for diagnostic runs. */
+extern void runtime_set_log_runtime_stats(bool enabled);
+
+/* Enable/disable per-kthread `rx_bursts` histogram lines on the RX path.
+ * Off by default; apps can enable for diagnostic runs. */
+extern void runtime_set_log_runtime_bursts(bool enabled);
+
 
 extern struct runtime_info *runtime_info;
 
