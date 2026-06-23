@@ -297,6 +297,7 @@ pub struct AppConfig {
     pub world_size: usize,
     pub rank: usize,
     pub num_spawners: usize,
+    pub nb_uthreads: usize,
     pub server_stats: bool,
     pub log_runtime_stats: bool,
     pub log_runtime_bursts: bool,
@@ -1579,6 +1580,7 @@ impl AppConfig {
 
         let distribution = Self::create_distribution(matches)?;
         let protocol = Self::create_protocol(matches, transport, &distribution)?;
+        let nb_uthreads = *matches.get_one::<usize>("nb_uthreads").unwrap_or(&1);
         let num_spawners = matches
             .get_one::<usize>("num_spawners")
             .copied()
@@ -1616,6 +1618,7 @@ impl AppConfig {
             world_size,
             rank: 0,
             num_spawners,
+            nb_uthreads,
             server_stats,
             log_runtime_stats,
             log_runtime_bursts,
@@ -1684,6 +1687,7 @@ pub enum RunMode {
     LinuxServer,
     RuntimeClient,
     SpawnerServer,
+    HermesUdpServer,
     LocalClient,
 }
 
@@ -1695,6 +1699,7 @@ impl FromStr for RunMode {
             "linux-server" => Ok(RunMode::LinuxServer),
             "runtime-client" => Ok(RunMode::RuntimeClient),
             "spawner-server" => Ok(RunMode::SpawnerServer),
+            "hermes-server" => Ok(RunMode::HermesUdpServer),
             "local-client" => Ok(RunMode::LocalClient),
             _ => Err(format!("Unknown run mode: {}", s)),
         }
@@ -1705,7 +1710,10 @@ impl RunMode {
     pub fn requires_runtime_backend(&self) -> bool {
         matches!(
             self,
-            RunMode::RuntimeClient | RunMode::SpawnerServer | RunMode::LocalClient
+            RunMode::RuntimeClient
+                | RunMode::SpawnerServer
+                | RunMode::HermesUdpServer
+                | RunMode::LocalClient
         )
     }
 }
@@ -2049,6 +2057,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .help("Number of UDP spawner servers to create"),
         )
         .arg(
+            Arg::new("nb_uthreads")
+                .long("nb-uthreads")
+                .num_args(1)
+                .value_parser(clap::value_parser!(usize))
+                .default_value("1")
+                .help("hermes-server: number of persistent worker uthreads"),
+        )
+        .arg(
             Arg::new("server_stats")
                 .long("server-stats")
                 .action(clap::ArgAction::SetTrue)
@@ -2137,6 +2153,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .clone()
                 .init_and_run(cfg_file.as_deref(), move || server::run_tcp_server(config)),
         },
+        RunMode::HermesUdpServer => config
+            .backend
+            .clone()
+            .init_and_run(cfg_file.as_deref(), move || {
+                server::run_hermes_style_udp_server(config)
+            }),
         RunMode::LinuxServer => match config.transport {
             Transport::Udp => config
                 .backend
