@@ -9,6 +9,7 @@ use rand::Rng;
 use rand_mt::Mt64;
 
 pub enum FakeWorker {
+    Nop,
     Sqrt,
     StridedMem(Vec<u8>, usize),
     RandomMem(Vec<u8>, Vec<usize>),
@@ -25,6 +26,7 @@ impl FakeWorker {
         assert!(tokens.len() > 0);
 
         match tokens[0] {
+            "nop" => Ok(FakeWorker::Nop),
             "sqrt" => Ok(FakeWorker::Sqrt),
             "stridedmem" | "randmem" | "memstream" | "pointerchase" => {
                 assert!(tokens.len() > 1);
@@ -110,6 +112,11 @@ impl FakeWorker {
 
     pub fn work(&self, iters: u64, randomness: u64) {
         match *self {
+            FakeWorker::Nop => {
+                for _ in 0..iters {
+                    unsafe { std::arch::asm!("nop"); }
+                }
+            }
             FakeWorker::Sqrt => {
                 let k = 2350845.545;
                 for i in 0..iters {

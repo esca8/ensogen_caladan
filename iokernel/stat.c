@@ -54,8 +54,8 @@ static void print_stats(void)
 	printf("-----------------\n");
 
 	for (i = 0; i < NR_STATS; i++) {
-		printf("%lu %s %lu\n", now, stat_names[i],
-			   cur_stats[i] - last_stats[i]);
+		printf("%lu %s %lu\n", now, stat_names[i], cur_stats[i]);
+			//    cur_stats[i] - last_stats[i]);
 		last_stats[i] = cur_stats[i];
 	}
 

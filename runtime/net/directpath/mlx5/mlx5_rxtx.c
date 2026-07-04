@@ -4,6 +4,8 @@
 
 #ifdef DIRECTPATH
 
+#include <stdio.h>
+
 #include <base/log.h>
 #include <base/mempool.h>
 #include <runtime/preempt.h>
@@ -244,6 +246,15 @@ int mlx5_transmit_one(struct mbuf *m)
 	k = getk();
 	v = &txqs[kthread_idx(k)];
 	idx = v->wq.head & (v->wq.cnt - 1);
+
+	// { // TODO: tmp. delete when running experiment
+	// 	unsigned char *p = mbuf_data(m);
+	// 	char hex[3 * 128 + 1];
+	// 	int j, n = mbuf_length(m) < 128 ? mbuf_length(m) : 128;
+	// 	for (j = 0; j < n; j++)
+	// 		sprintf(&hex[3 * j], "%02X ", p[j]);
+	// 	log_info("tx pkt len=%u: %s", mbuf_length(m), hex);
+	// }
 
 	if (nr_inflight_tx(v) >= SQ_CLEAN_THRESH) {
 		compl = mlx5_gather_completions(mbs, v, SQ_CLEAN_MAX);

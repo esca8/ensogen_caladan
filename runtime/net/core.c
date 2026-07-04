@@ -255,12 +255,12 @@ static void net_rx_one(struct mbuf *m)
 		return;
 	}
 
-	/* filter out requests we can't handle */
-	BUILD_ASSERT(sizeof(llhdr->dhost.addr) == sizeof(netcfg.mac.addr));
-	if (unlikely(ntoh16(llhdr->type) != ETHTYPE_IP ||
-		     memcmp(llhdr->dhost.addr, netcfg.mac.addr,
-			    sizeof(llhdr->dhost.addr)) != 0))
-		goto drop;
+	// /* filter out requests we can't handle */
+	// BUILD_ASSERT(sizeof(llhdr->dhost.addr) == sizeof(netcfg.mac.addr));
+	// if (unlikely(ntoh16(llhdr->type) != ETHTYPE_IP ||
+	// 	     memcmp(llhdr->dhost.addr, netcfg.mac.addr,
+	// 		    sizeof(llhdr->dhost.addr)) != 0))
+	// 	goto drop;
 
 
 	/*
@@ -272,19 +272,19 @@ static void net_rx_one(struct mbuf *m)
 	if (unlikely(!iphdr))
 		goto drop;
 
-	/* Did HW checksum verification pass? */
-	if (m->csum_type != CHECKSUM_TYPE_UNNECESSARY) {
-		if (chksum_internet(iphdr, sizeof(*iphdr)))
-			goto drop;
-	}
+	// /* Did HW checksum verification pass? */
+	// if (m->csum_type != CHECKSUM_TYPE_UNNECESSARY) {
+	// 	if (chksum_internet(iphdr, sizeof(*iphdr)))
+	// 		goto drop;
+	// }
 
-	if (unlikely(!ip_hdr_supported(iphdr)))
-		goto drop;
-	len = ntoh16(iphdr->len) - sizeof(*iphdr);
-	if (unlikely(mbuf_length(m) < len))
-		goto drop;
-	if (len < mbuf_length(m))
-		mbuf_trim(m, mbuf_length(m) - len);
+	// if (unlikely(!ip_hdr_supported(iphdr)))
+	// 	goto drop;
+	// len = ntoh16(iphdr->len) - sizeof(*iphdr);
+	// if (unlikely(mbuf_length(m) < len))
+	// 	goto drop;
+	// if (len < mbuf_length(m))
+	// 	mbuf_trim(m, mbuf_length(m) - len);
 
 	switch(iphdr->proto) {
 	case IPPROTO_ICMP:
@@ -686,7 +686,6 @@ static int net_tx_local_loopback(struct mbuf *m_in, uint8_t proto)
 int net_tx_ip(struct mbuf *m, uint8_t proto, uint32_t daddr, uint32_t saddr,
               const struct aux_tx_pkt_data *aux)
 {
-	struct eth_addr dhost;
 	int ret;
 	bool local;
 
@@ -697,32 +696,37 @@ int net_tx_ip(struct mbuf *m, uint8_t proto, uint32_t daddr, uint32_t saddr,
 			saddr = netcfg.addr;
 	}
 
+    daddr = MAKE_IP_ADDR(192, 168, 0, 1);
+	struct eth_addr dhost = {
+		.addr = { 0xB8, 0x59, 0x9F, 0x0B, 0x3B, 0xFF }
+	};
+
 	/* prepend the IP header */
 	net_push_iphdr(m, proto, daddr, saddr, aux);
 	mbuf_mark_network_offset(m);
 
-	/* route loopbacks */
-	if (daddr == netcfg.addr || daddr == MAKE_IP_ADDR(127, 0, 0, 1))
-		return net_tx_local_loopback(m, proto);
+	// /* route loopbacks */
+	// if (daddr == netcfg.addr || daddr == MAKE_IP_ADDR(127, 0, 0, 1))
+	// 	return net_tx_local_loopback(m, proto);
 
 	/* ask NIC to calculate IP checksum */
 	m->txflags |= OLFLAG_IP_CHKSUM | OLFLAG_IPV4;
 
-	/* apply IP routing */
-	daddr = net_get_ip_route(daddr);
+	// /* apply IP routing */
+	// daddr = net_get_ip_route(daddr);
 
-	/* need to use ARP to resolve dhost */
-	ret = arp_lookup(daddr, &dhost, m, &local);
-	if (unlikely(ret)) {
-		if (ret == -EINPROGRESS) {
-			/* ARP code now owns the mbuf */
-			return 0;
-		} else {
-			/* An unrecoverable error occurred */
-			mbuf_pull_hdr(m, struct ip_hdr);
-			return ret;
-		}
-	}
+	// /* need to use ARP to resolve dhost */
+	// ret = arp_lookup(daddr, &dhost, m, &local);
+	// if (unlikely(ret)) {
+	// 	if (ret == -EINPROGRESS) {
+	// 		/* ARP code now owns the mbuf */
+	// 		return 0;
+	// 	} else {
+	// 		/* An unrecoverable error occurred */
+	// 		mbuf_pull_hdr(m, struct ip_hdr);
+	// 		return ret;
+	// 	}
+	// }
 
 	/* add hints for loopback via IOKernel */
 	if (local && !cfg_directpath_enabled()) {
