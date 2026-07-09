@@ -11,11 +11,11 @@ use std::io::Read;
 
 pub struct Payload {
     pub work_iterations: u64,
-    pub index: u64,
-    pub randomness: u64,
+    pub index: u32,
+    pub randomness: u32,
 }
 
-pub const PAYLOAD_SIZE: usize = 24;
+pub const PAYLOAD_SIZE: usize = 16;
 
 #[derive(Clone, Copy, Serialize, Deserialize)]
 pub struct SyntheticProtocol {}
@@ -28,8 +28,8 @@ impl LoadgenProtocol for SyntheticProtocol {
     fn gen_req(&self, i: usize, p: &Packet, buf: &mut Vec<u8>) {
         Payload {
             work_iterations: p.work_iterations,
-            index: i as u64,
-            randomness: p.randomness,
+            index: i as u32,
+            randomness: p.randomness as u32,
         }
         .serialize_into(buf)
         .unwrap();
@@ -39,7 +39,7 @@ impl LoadgenProtocol for SyntheticProtocol {
         let scratch = buf.get_empty_buf();
         sock.read_exact(&mut scratch[..PAYLOAD_SIZE])?;
         let payload = Payload::deserialize(&mut &scratch[..])?;
-        Ok((payload.index as usize, payload.randomness))
+        Ok((payload.index as usize, payload.randomness as u64))
     }
 }
 
@@ -56,16 +56,16 @@ impl SyntheticProtocol {
 impl Payload {
     pub fn serialize_into<W: io::Write>(&self, writer: &mut W) -> io::Result<()> {
         writer.write_u64::<BigEndian>(self.work_iterations)?;
-        writer.write_u64::<BigEndian>(self.index)?;
-        writer.write_u64::<BigEndian>(self.randomness)?;
+        writer.write_u32::<BigEndian>(self.index)?;
+        writer.write_u32::<BigEndian>(self.randomness)?;
         Ok(())
     }
 
     pub fn deserialize<R: io::Read>(reader: &mut R) -> io::Result<Payload> {
         let p = Payload {
             work_iterations: reader.read_u64::<BigEndian>()?,
-            index: reader.read_u64::<BigEndian>()?,
-            randomness: reader.read_u64::<BigEndian>()?,
+            index: reader.read_u32::<BigEndian>()?,
+            randomness: reader.read_u32::<BigEndian>()?,
         };
         return Ok(p);
     }
