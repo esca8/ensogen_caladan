@@ -196,7 +196,8 @@ static inline int dpdk_port_init(uint8_t port, struct rte_mempool *mbuf_pool)
 		// assigned one.
 		addr.addr_bytes[5] += 1;
 	}
-	memcpy(&iok_info->host_mac, &addr, sizeof(iok_info->host_mac));
+    // TODO: tmp set addr = 0 to bypass enso src_mac_filter
+	memset(&iok_info->host_mac, 0, sizeof(iok_info->host_mac)); 
 	log_info("dpdk: driver: %s port %u MAC: %02" PRIx8 " %02" PRIx8 " %02" PRIx8
 			" %02" PRIx8 " %02" PRIx8 " %02" PRIx8 "",
 			dev_info.driver_name, (unsigned)port,

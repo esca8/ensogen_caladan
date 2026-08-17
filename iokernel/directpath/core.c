@@ -225,7 +225,14 @@ static int directpath_query_nic_vport(void)
 	log_info("directpath: mac %02X:%02X:%02X:%02X:%02X:%02X", mac_addr[0], mac_addr[1],
 		     mac_addr[2], mac_addr[3], mac_addr[4], mac_addr[5]);
 
-	memcpy(&iok_info->host_mac, mac_addr, sizeof(iok_info->host_mac));
+	/* Hand the runtime an all-zero source MAC. The enso pktgen hardware
+	 * (my_stats.sv) drops RX packets whose src MAC == the NIC's real MAC, so
+	 * echoes stamped with the real MAC are never counted (RX stays 0). Zeroing
+	 * host_mac makes the runtime stamp 00:00:00:00:00:00 as its Ethernet
+	 * source, which the filter passes. The hardware vport MAC below is still
+	 * programmed to the real address (for RX). */
+	memset(&iok_info->host_mac, 0, sizeof(iok_info->host_mac));
+    log_info("memset host_mac to 0\n");
 
 	mlx5_modify_nic_vport_set_mac(mac_addr);
 
