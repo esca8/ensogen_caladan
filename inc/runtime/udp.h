@@ -99,6 +99,8 @@ struct udp_spawn_data {
 	struct netaddr	laddr;
 	struct netaddr	raddr;
 	void		*release_data;
+	uint64_t	rx_poll_tsc, ready_tsc;
+	uint32_t	cq_wait_us;
 };
 
 typedef void (*udpspawn_fn_t)(struct udp_spawn_data *d);

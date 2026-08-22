@@ -49,6 +49,16 @@ pub fn preempt_disable() {
     }
 }
 
+/// Index of the kthread currently running this uthread (0..maxks-1).
+#[inline]
+pub fn kthread_id() -> usize {
+    let id: u32;
+    unsafe {
+        asm!("mov {0:e}, DWORD PTR gs:[rip + {1}]", out(reg) id, sym ffi::__perthread_thread_id);
+    }
+    id as usize
+}
+
 #[allow(unused)]
 pub fn base_init() -> Result<(), i32> {
     convert_error(unsafe { ffi::base_init() })

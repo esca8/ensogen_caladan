@@ -231,6 +231,8 @@ __sched_run(struct core_state *s, struct thread *th, unsigned int core)
 	s->last_th = s->cur_th;
 	s->cur_th = th;
 	s->wait = true;
+	if (s->idle)
+		STAT_INC(CORE_WAKE, 1);
 	s->idle = false;
 	return 0;
 }
@@ -847,6 +849,7 @@ void sched_poll(void)
 				proc_put(s->cur_th->p);
 				s->cur_th = NULL;
 			}
+			STAT_INC(CORE_PARK, 1);
 			s->idle = true;
 			bitmap_set(idle, core);
 			idle_cnt++;

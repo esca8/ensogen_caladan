@@ -88,6 +88,7 @@ extern bool mlx5_rx_poll_locked(unsigned int q_index);
 
 
 // Top level initializaiton functions
+extern int mlx5_rxlat_clock_init(void);
 extern int mlx5_verbs_init_context(bool uses_qsteering);
 extern int mlx5_verbs_init(bool uses_qsteering);
 extern int mlx5_init_flow_steering(void);

@@ -9,6 +9,7 @@
 #include <base/log.h>
 #include <base/mempool.h>
 #include <runtime/preempt.h>
+#include <base/time.h>
 #include <util/mmio.h>
 #include <util/udma_barrier.h>
 
@@ -18,6 +19,24 @@ off_t rx_mr_offset;
 off_t tx_mr_offset;
 struct mlx5_txq txqs[NCPU];
 struct mlx5_rxq rxqs[NCPU];
+
+/* NIC HW clock for per-packet RX-queue delay (mirrors iokernel/hw_timestamp) */
+static void *hca_core_clock;
+static double device_us_per_cycle;
+
+int mlx5_rxlat_clock_init(void)
+{
+	struct ibv_device_attr_ex attr;
+	struct mlx5dv_context mctx = { .comp_mask = MLX5DV_CONTEXT_MASK_HCA_CORE_CLOCK };
+	if (ibv_query_device_ex(context, NULL, &attr) || !attr.hca_core_clock)
+		return -1;
+	device_us_per_cycle = 1000.0 / (double)attr.hca_core_clock;
+	if (mlx5dv_query_device(context, &mctx) ||
+	    !(mctx.comp_mask & MLX5DV_CONTEXT_MASK_HCA_CORE_CLOCK))
+		return -1;
+	hca_core_clock = mctx.hca_core_clock;
+	return 0;
+}
 
 static void mlx5_init_tx_segment(struct mlx5_txq *v, unsigned int idx,
 	                             uint32_t lkey, uint32_t sqn)
@@ -351,6 +370,8 @@ int mlx5_gather_rx(struct mlx5_rxq *v, struct mbuf **ms, unsigned int budget)
 
 	struct mlx5_cqe64 *cqe;
 	struct mbuf *m;
+	uint64_t poll_tsc = rdtsc();
+	uint32_t now_hw = hca_core_clock ? be32toh(mmio_read32_be(hca_core_clock + 4)) : 0;
 
 	for (rx_cnt = 0; rx_cnt < budget; rx_cnt++) {
 		cqe = &v->cq.cqes[v->cq.head & (v->cq.cnt - 1)];
@@ -370,6 +391,12 @@ int mlx5_gather_rx(struct mlx5_rxq *v, struct mbuf **ms, unsigned int budget)
 		wqe_idx = be16toh(cqe->wqe_counter) & (v->wq.cnt - 1);
 		m = v->wq.buffers[wqe_idx];
 		m = mbuf_fill_cqe(m, cqe);
+		if (likely(m)) {
+			uint32_t ts = (uint32_t)be64toh(cqe->timestamp);
+			m->rx_poll_tsc = poll_tsc;
+			m->cq_wait_us = (now_hw && (int32_t)(ts - now_hw) <= 0) ?
+				(uint32_t)((now_hw - ts) * device_us_per_cycle) : 0;
+		}
 		ms[rx_cnt] = m;
 	}
 

@@ -6,6 +6,7 @@
 #include <base/lock.h>
 #include <base/log.h>
 #include <base/slab.h>
+#include <base/time.h>
 #include <base/tcache.h>
 
 #include <runtime/preempt.h>

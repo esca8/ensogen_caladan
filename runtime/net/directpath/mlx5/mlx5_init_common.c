@@ -185,6 +185,7 @@ int mlx5_init(void)
 			if (ret)
 				return ret;
 
+			mlx5_rxlat_clock_init();
 			return mlx5_init_flow_steering();
 		}
 	}
