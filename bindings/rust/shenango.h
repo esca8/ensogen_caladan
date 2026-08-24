@@ -18,3 +18,9 @@
 #include <runtime/thread.h>
 #include <runtime/timer.h>
 #include <runtime/udp.h>
+
+/* batch-size histogram seen by mlx5_gather_rx (defined in mlx5_rxtx.c); size = RUNTIME_RX_BATCH_SIZE + 1 */
+extern uint64_t rxlat_burst_hist[33];
+
+/* start the runtime STAT responder on port 40 (runtime/stat.c) */
+extern int stat_init_late(void);

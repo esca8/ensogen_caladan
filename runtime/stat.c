@@ -77,26 +77,13 @@ static int append_stat(char **pos, char *end, const char *name, uint64_t val)
 
 static ssize_t stat_write_buf(char *buf, size_t len)
 {
-	uint64_t stats[STAT_NR], tc_stats[4];
+	uint64_t tc_stats[4];
 	struct kthread *k;
 	char *pos = buf, *end = buf + len;
+	char name[64];
 	int i, j, ret;
 
-	memset(stats, 0, sizeof(stats));
 	memset(tc_stats, 0, sizeof(tc_stats));
-
-	/* gather stats from each kthread */
-	for (i = 0; i < maxks; i++) {
-		k = &ks[i];
-		for (j = 0; j < STAT_NR; j++)
-			stats[j] += k->stats[j];
-
-		/* get cycles for currently running uthreads */
-		if ((ACCESS_ONCE(k->q_ptrs->rcu_gen) & 0x1) == 0)
-			continue;
-
-		stats[STAT_PROGRAM_CYCLES] += rdtsc() - ACCESS_ONCE(k->q_ptrs->run_start_tsc);
-	}
 
 	for_each_thread(i) {
 		tc_stats[0] += perthread_get_remote(mag_free, i);
@@ -105,11 +92,21 @@ static ssize_t stat_write_buf(char *buf, size_t len)
 		tc_stats[3] += perthread_get_remote(pool_free, i);
 	}
 
-	/* write out the stats to the buffer */
-	for (j = 0; j < STAT_NR; j++) {
-		ret = append_stat(&pos, end, stat_names[j], stats[j]);
-		if (ret)
-			return ret;
+	/* write out per-kthread stats: "k<idx>.<name>:<val>," */
+	for (i = 0; i < maxks; i++) {
+		k = &ks[i];
+		for (j = 0; j < STAT_NR; j++) {
+			uint64_t v = k->stats[j];
+			if (j == STAT_PROGRAM_CYCLES &&
+			    (ACCESS_ONCE(k->q_ptrs->rcu_gen) & 0x1))
+				v += rdtsc() - ACCESS_ONCE(k->q_ptrs->run_start_tsc);
+			snprintf(name, sizeof(name), "k%d.%s", i, stat_names[j]);
+			ret = append_stat(&pos, end, name, v);
+			if (ret == -E2BIG)
+				goto done; /* truncate gracefully (e.g. UDP MTU) */
+			if (ret)
+				return ret;
+		}
 	}
 
 	for (j = 0; j < ARRAY_SIZE(tc_stats); j++) {
@@ -127,6 +124,7 @@ static ssize_t stat_write_buf(char *buf, size_t len)
 	if (ret)
 		return ret;
 
+done:
 	pos[-1] = '\0'; /* clip off last ',' */
 	return pos - buf;
 }

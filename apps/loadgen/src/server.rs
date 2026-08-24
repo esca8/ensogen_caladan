@@ -156,7 +156,21 @@ fn rxlat_report() {
             RXLAT_NAMES[s], n, pct(50.0), pct(99.0), pct(99.9)
         );
     }
-    println!("==============="); 
+    // batch-size distribution seen by mlx5_gather_rx (per-interval): avg + exact percentiles
+    let cur: [u64; 33] = unsafe { shenango::ffi::rxlat_burst_hist };
+    static BURST_PREV: [AtomicU64; 33] = { const Z: AtomicU64 = AtomicU64::new(0); [Z; 33] };
+    let d: [u64; 33] = std::array::from_fn(|i| cur[i] - BURST_PREV[i].swap(cur[i], Ordering::Relaxed));
+    let n: u64 = d.iter().sum();
+    if n > 0 {
+        let avg = d.iter().enumerate().map(|(i, &v)| i as u64 * v).sum::<u64>() as f64 / n as f64;
+        let bpct = |p: f64| {
+            let t = (n as f64 * p / 100.0) as u64;
+            d.iter().scan(0u64, |s, &v| { *s += v; Some(*s) }).position(|c| c >= t).unwrap_or(32)
+        };
+        println!("burst     avg={:.1} p50={} p99={} p99.9={} calls={}",
+            avg, bpct(50.0), bpct(99.0), bpct(99.9), n);
+    }
+    println!("===============");
 }
 
 pub fn run_spawner_server(addr: SocketAddrV4, workerspec: &str) {
@@ -164,6 +178,8 @@ pub fn run_spawner_server(addr: SocketAddrV4, workerspec: &str) {
     unsafe {
         SPAWNER_WORKER = Some(FakeWorker::create(workerspec).unwrap());
     }
+    // start the runtime STAT responder (port 40) so counters can be queried
+    let _ = unsafe { shenango::ffi::stat_init_late() };
     extern "C" fn echo(d: *mut shenango::ffi::udp_spawn_data) {
         unsafe {
             let t_run = shenango::rdtsc();
