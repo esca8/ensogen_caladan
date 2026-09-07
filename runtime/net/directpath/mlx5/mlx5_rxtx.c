@@ -24,8 +24,10 @@ struct mlx5_rxq rxqs[NCPU];
 static void *hca_core_clock;
 static double device_us_per_cycle;
 
-/* batch-size distribution seen by mlx5_gather_rx (index = rx_cnt, 1..RUNTIME_RX_BATCH_SIZE) */
-uint64_t rxlat_burst_hist[33];
+/* per-kthread batch-size distribution seen by mlx5_gather_rx (index = rx_cnt, 1..RUNTIME_RX_BATCH_SIZE) */
+uint64_t rxlat_burst_hist[NCPU][33];
+/* per-kthread runqueue depth after a batch is delivered (index 32 = >= 32) */
+uint64_t rxlat_rq_hist[NCPU][33];
 BUILD_ASSERT(RUNTIME_RX_BATCH_SIZE + 1 <= 33);
 
 int mlx5_rxlat_clock_init(void)
@@ -407,7 +409,7 @@ int mlx5_gather_rx(struct mlx5_rxq *v, struct mbuf **ms, unsigned int budget)
 	if (unlikely(!rx_cnt))
 		return 0;
 
-	__atomic_fetch_add(&rxlat_burst_hist[rx_cnt], 1, __ATOMIC_RELAXED);
+	__atomic_fetch_add(&rxlat_burst_hist[v - rxqs][rx_cnt], 1, __ATOMIC_RELAXED);
 
 	ACCESS_ONCE(*v->shadow_tail) = v->cq.head;
 

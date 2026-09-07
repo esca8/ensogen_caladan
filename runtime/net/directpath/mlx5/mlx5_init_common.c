@@ -68,6 +68,12 @@ static void mlx5_softirq(void *arg)
 		if (cnt)
 			net_rx_batch(ms, cnt);
 		preempt_disable();
+		if (cnt) {
+			struct kthread *k = myk();
+			uint32_t d = k->q_ptrs->rq_head - k->q_ptrs->rq_tail;
+			__atomic_fetch_add(&rxlat_rq_hist[v - rxqs][MIN(d, 32)], 1,
+				           __ATOMIC_RELAXED);
+		}
 		v->poll_th = thread_self();
 		thread_park_and_preempt_enable();
 	}

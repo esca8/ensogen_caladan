@@ -85,6 +85,7 @@ extern int mlx5_gather_rx(struct mlx5_rxq *rxq, struct mbuf **ms, unsigned int b
 extern int mlx5_gather_rx_strided(struct mlx5_rxq *v, struct mbuf **ms, unsigned int budget);
 extern bool mlx5_rx_poll(unsigned int q_index);
 extern bool mlx5_rx_poll_locked(unsigned int q_index);
+extern uint64_t rxlat_rq_hist[NCPU][33];
 
 
 // Top level initializaiton functions

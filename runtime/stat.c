@@ -75,7 +75,7 @@ static int append_stat(char **pos, char *end, const char *name, uint64_t val)
 	return 0;
 }
 
-static ssize_t stat_write_buf(char *buf, size_t len)
+ssize_t stat_write_buf(char *buf, size_t len)
 {
 	uint64_t tc_stats[4];
 	struct kthread *k;
