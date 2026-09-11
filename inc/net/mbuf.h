@@ -50,6 +50,8 @@ struct mbuf {
 	uint64_t	timestamp;  /* the time the packet was last sent */
 	uint32_t	seg_seq;    /* the first seg number */
 	uint32_t	seg_end;    /* the last seg number (noninclusive) */
+	uint64_t	rx_poll_tsc; /* RX latency: tsc when drained from the CQ */
+	uint32_t	cq_wait_us;  /* RX latency: NIC-arrival -> poll wait (us) */
 };
 
 static inline unsigned char *__mbuf_pull(struct mbuf *m, unsigned int len)

@@ -287,6 +287,7 @@ pub struct AppConfig {
     pub fakework_spec: String,
     pub intersample_sleep: u64,
     pub do_runtime_stat: bool,
+    pub log_runtime_stats: bool,
     pub live_mode: bool,
     pub closed_bench: bool,
     pub depth: usize,
@@ -1581,6 +1582,7 @@ impl AppConfig {
             .copied()
             .unwrap_or(DEFAULT_DISCARD_PCT);
         let do_runtime_stat = *matches.get_one::<bool>("runtime_stat").unwrap_or(&false);
+        let log_runtime_stats = *matches.get_one::<bool>("log_runtime_stats").unwrap_or(&false);
         let live_mode = *matches.get_one::<bool>("live").unwrap_or(&false);
         let closed_bench = *matches.get_one::<bool>("closed_bench").unwrap_or(&false);
         let depth = matches
@@ -1640,6 +1642,7 @@ impl AppConfig {
             fakework_spec,
             intersample_sleep,
             do_runtime_stat,
+            log_runtime_stats,
             live_mode,
             closed_bench,
             depth,
@@ -2071,6 +2074,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .action(clap::ArgAction::SetTrue)
                 .help("run runtime stat"),
         )
+        .arg(
+            Arg::new("log_runtime_stats")
+                .long("log-runtime-stats")
+                .action(clap::ArgAction::SetTrue)
+                .help("log per-stage RX latency + per-kthread runtime stats to stdout"),
+        )
         .args(&SyntheticProtocol::args())
         .args(&MemcachedProtocol::args())
         .args(&DnsProtocol::args())
@@ -2128,7 +2137,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 .backend
                 .clone()
                 .init_and_run(cfg_file.as_deref(), move || {
-                    server::run_spawner_server(config.addrs[0], &config.fakework_spec)
+                    server::run_spawner_server(config.addrs[0], &config.fakework_spec, config.log_runtime_stats)
                 }),
             Transport::Tcp => config
                 .backend

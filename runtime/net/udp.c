@@ -7,6 +7,7 @@
 
 #include <base/hash.h>
 #include <base/kref.h>
+#include <base/time.h>
 #include <runtime/smalloc.h>
 #include <runtime/rculist.h>
 #include <runtime/sync.h>
@@ -836,6 +837,9 @@ static void udp_par_recv(struct trans_entry *e, struct mbuf *m)
 	d->raddr.ip = ntoh32(iphdr->saddr);
 	d->raddr.port = ntoh16(udphdr->src_port);
 	d->release_data = m;
+	d->cq_wait_us = m->cq_wait_us;
+	d->rx_poll_tsc = m->rx_poll_tsc;
+	d->ready_tsc = rdtsc();
 	thread_ready(th);
 }
 
