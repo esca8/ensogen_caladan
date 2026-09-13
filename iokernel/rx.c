@@ -145,11 +145,16 @@ static void rx_one_pkt(struct rte_mbuf *buf)
 		}
 	}
 
-	log_debug("rx: rx packet with MAC %02" PRIx8 " %02" PRIx8 " %02"
+	log_warn("rx: rx packet with MAC %02" PRIx8 " %02" PRIx8 " %02"
 		  PRIx8 " %02" PRIx8 " %02" PRIx8 " %02" PRIx8,
 		  ptr_dst_addr->addr_bytes[0], ptr_dst_addr->addr_bytes[1],
 		  ptr_dst_addr->addr_bytes[2], ptr_dst_addr->addr_bytes[3],
 		  ptr_dst_addr->addr_bytes[4], ptr_dst_addr->addr_bytes[5]);
+    log_warn("pkt buf: ");
+    for(int i = 0; i < 70; i++) {
+        printf("%02X ", ((unsigned char*)ptr_mac_hdr)[i]);
+    }
+    printf("\n");
 
 	ether_type = rte_be_to_cpu_16(ptr_mac_hdr->ether_type);
 

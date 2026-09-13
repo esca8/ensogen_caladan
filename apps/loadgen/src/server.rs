@@ -28,7 +28,7 @@ pub fn run_linux_udp_server(config: AppConfig) {
                 loop {
                     let (len, remote_addr) = socket.recv_from(&mut buf[..]).unwrap();
                     let payload = Payload::deserialize(&mut &buf[..len]).unwrap();
-                    worker.work(payload.work_iterations, payload.randomness);
+                    worker.work(payload.work_iterations, payload.randomness as u64);
                     socket.send_to(&buf[..len], remote_addr).unwrap();
                 }
             })
@@ -46,8 +46,8 @@ fn socket_worker(socket: &mut Connection, worker: Arc<FakeWorker>) {
         socket.read_exact(&mut v[..PAYLOAD_SIZE])?;
         let mut payload = Payload::deserialize(&mut &v[..PAYLOAD_SIZE])?;
         v.clear();
-        worker.work(payload.work_iterations, payload.randomness);
-        payload.randomness = shenango::rdtsc();
+        worker.work(payload.work_iterations, payload.randomness as u64);
+        payload.randomness = shenango::rdtsc() as u32;
         payload.serialize_into(&mut v)?;
         Ok(socket.write_all(&v[..])?)
     };
@@ -95,10 +95,12 @@ pub fn run_spawner_server(addr: SocketAddrV4, workerspec: &str) {
             let mut payload = Payload::deserialize(&mut &buf[..]).unwrap();
             #[allow(static_mut_refs)]
             let worker = SPAWNER_WORKER.as_ref().unwrap();
-            worker.work(payload.work_iterations, payload.randomness);
-            payload.randomness = shenango::rdtsc();
-            let mut array = ArrayVec::<_, PAYLOAD_SIZE>::new();
+            worker.work(payload.work_iterations, payload.randomness as u64);
+            payload.randomness = shenango::rdtsc() as u32;
+            /* echo the request's padding so the reply mirrors its size */
+            let mut array = ArrayVec::<_, 1472>::new();
             payload.serialize_into(&mut array).unwrap();
+            array.try_extend_from_slice(&buf[PAYLOAD_SIZE..]).unwrap();
             let _ = UdpSpawner::reply(d, array.as_slice());
             UdpSpawner::release_data(d);
         }
